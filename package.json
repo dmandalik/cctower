@@ -1,0 +1,27 @@
+{
+  "name": "cctower",
+  "version": "0.0.1",
+  "description": "Control tower for Claude Code - pre-flight token checks, attention alerts, and landing reports.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dmandalik/cctower.git"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "hooks",
+    "tokens",
+    "notifications"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/dmandalik/cctower/issues"
+  },
+  "homepage": "https://github.com/dmandalik/cctower#readme"
+}
