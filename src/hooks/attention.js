@@ -1,0 +1,114 @@
+#!/usr/bin/env node
+'use strict';
+
+// Attention alerts. Registered on both Notification and Stop.
+//   Notification -> classify permission (urgent) vs idle (normal), toast,
+//                   and record when the session started waiting.
+//   Stop         -> "done" toast (with the turn verdict when available),
+//                   clear waiting-since, and accumulate the waited seconds.
+// Config toggles are respected; notifications dedupe to one per session / 30s.
+// Fail open: any error -> exit 0.
+
+const path = require('path');
+const { readStdinJson } = require('../io');
+const { statePaths } = require('../paths');
+const { loadConfig, readJson, writeJson, appendEvent } = require('../state');
+const { notify } = require('../notify');
+
+const DEDUPE_MS = 30_000;
+
+function sessionFile(id) {
+  return path.join(statePaths().sessions, `${id || 'unknown'}.json`);
+}
+
+// Permission requests are urgent; everything else is "waiting for input".
+function classify(input) {
+  const hay = [input.type, input.notification_type, input.message, input.title]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  if (/permission|approv|allow/.test(hay)) return 'permission';
+  return 'idle';
+}
+
+function inCooldown(sess, now) {
+  return typeof sess.lastNotifiedAt === 'number' && now - sess.lastNotifiedAt < DEDUPE_MS;
+}
+
+function handleNotification(input, cfg) {
+  const now = Date.now();
+  const file = sessionFile(input.session_id);
+  const sess = readJson(file, {}) || {};
+
+  const kind = classify(input);
+  const urgent = kind === 'permission';
+
+  // First wait wins until Stop clears it.
+  if (typeof sess.waitingSince !== 'number') sess.waitingSince = now;
+
+  let status = 'off';
+  if (cfg.notifications.needsInput && !inCooldown(sess, now)) {
+    const title = urgent ? 'Claude needs permission' : 'Claude is waiting';
+    const message =
+      (input.message && String(input.message).slice(0, 180)) ||
+      (urgent ? 'A tool call needs your approval.' : 'Waiting for your input.');
+    status = notify({ title, message, urgent, sound: cfg.notifications.sound && urgent });
+    sess.lastNotifiedAt = now;
+  }
+
+  writeJson(file, sess);
+  appendEvent({
+    ts: new Date().toISOString(),
+    event: 'notification',
+    session: input.session_id || null,
+    kind,
+    notify: status,
+  });
+}
+
+function handleStop(input, cfg) {
+  const now = Date.now();
+  const file = sessionFile(input.session_id);
+  const sess = readJson(file, {}) || {};
+
+  // Fold the time spent waiting into the running total for the report.
+  if (typeof sess.waitingSince === 'number') {
+    sess.waitedSeconds =
+      (sess.waitedSeconds || 0) + Math.max(0, Math.round((now - sess.waitingSince) / 1000));
+    delete sess.waitingSince;
+  }
+
+  let status = 'off';
+  if (cfg.notifications.done && !inCooldown(sess, now)) {
+    const verdict = sess.verdict || null; // land.js fills this in (Phase 3)
+    const title = verdict ? `Claude done · ${verdict}` : 'Claude done';
+    const message = verdict ? `Turn finished (${verdict}).` : 'Turn finished.';
+    status = notify({ title, message, sound: cfg.notifications.sound });
+    sess.lastNotifiedAt = now;
+  }
+
+  writeJson(file, sess);
+  appendEvent({
+    ts: new Date().toISOString(),
+    event: 'stop',
+    session: input.session_id || null,
+    waited: sess.waitedSeconds || 0,
+    notify: status,
+  });
+}
+
+function run() {
+  const input = readStdinJson();
+  const cfg = loadConfig();
+  // Prefer the declared event; fall back to a shape heuristic.
+  const event = input.hook_event_name || (input.message ? 'Notification' : 'Stop');
+  if (event === 'Notification') handleNotification(input, cfg);
+  else if (event === 'Stop') handleStop(input, cfg);
+  return 0;
+}
+
+try {
+  process.exit(run());
+} catch {
+  process.exit(0); // fail open
+}

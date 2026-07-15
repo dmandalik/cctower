@@ -1,0 +1,8 @@
+{
+  "session_id": "sess-attn-0001",
+  "transcript_path": "/tmp/cctower-nonexistent-transcript.jsonl",
+  "cwd": "/tmp",
+  "hook_event_name": "Notification",
+  "type": "permission_prompt",
+  "message": "Claude needs your permission to run Bash(rm -rf build)"
+}

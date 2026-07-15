@@ -1,0 +1,7 @@
+{
+  "session_id": "sess-attn-0001",
+  "transcript_path": "/tmp/cctower-nonexistent-transcript.jsonl",
+  "cwd": "/tmp",
+  "hook_event_name": "Stop",
+  "stop_hook_active": false
+}

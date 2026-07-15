@@ -1,0 +1,8 @@
+{
+  "session_id": "sess-attn-0002",
+  "transcript_path": "/tmp/cctower-nonexistent-transcript.jsonl",
+  "cwd": "/tmp",
+  "hook_event_name": "Notification",
+  "type": "idle_prompt",
+  "message": "Claude is waiting for your input"
+}

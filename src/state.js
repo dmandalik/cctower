@@ -45,10 +45,17 @@ function readJson(file, fallback = null) {
   }
 }
 
-// Config merged over defaults, so new keys always have a sane value.
+// Config merged over defaults, so new keys always have a sane value. The
+// notifications sub-object is merged too, so a partial user config can't
+// silently drop a sibling toggle.
 function loadConfig() {
   const p = statePaths();
-  return { ...DEFAULT_CONFIG, ...(readJson(p.config, {}) || {}) };
+  const loaded = readJson(p.config, {}) || {};
+  return {
+    ...DEFAULT_CONFIG,
+    ...loaded,
+    notifications: { ...DEFAULT_CONFIG.notifications, ...(loaded.notifications || {}) },
+  };
 }
 
 // Write defaults on first install; leave an existing config untouched.
