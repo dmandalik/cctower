@@ -61,3 +61,24 @@ test('server serves /state JSON and the index page', async () => {
     server.close();
   }
 });
+
+test('POST /config updates config and shows up in /state', async () => {
+  const server = start({ open: false, port: 0 });
+  await new Promise((r) => server.once('listening', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const r = await fetch(`${base}/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'gate', mutedProjects: ['algo'] }),
+    });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual((await r.json()).mode, 'gate');
+
+    const st = await (await fetch(`${base}/state`)).json();
+    assert.strictEqual(st.config.mode, 'gate');
+    assert.deepStrictEqual(st.config.mutedProjects, ['algo']);
+  } finally {
+    server.close();
+  }
+});

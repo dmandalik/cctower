@@ -94,6 +94,7 @@ function run() {
     const prev = readJson(file, {}) || {};
     writeJson(file, {
       ...prev,
+      project: input.cwd ? path.basename(String(input.cwd)) : prev.project,
       lastPrompt: { ts: new Date().toISOString(), estimate: est, gitRef: gitRef(input.cwd) },
     });
   }

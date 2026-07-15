@@ -6,17 +6,13 @@
 <title>cctower</title>
 <style>
   :root {
-    --bg: #f4f2ec;
-    --panel: #fdfcfa;
-    --line: #e7e3d9;
-    --ink: #2a2824;
-    --mut: #8a877e;
-    --accent: #d97757;
-    --accent-weak: rgba(217, 119, 87, .12);
+    --bg: #f4f2ec; --panel: #fdfcfa; --line: #e7e3d9;
+    --ink: #2a2824; --mut: #8a877e;
+    --accent: #d97757; --accent-weak: rgba(217, 119, 87, .12);
     --green: #4f8a54; --green-bg: rgba(79, 138, 84, .13);
     --amber: #b5762a; --amber-bg: rgba(181, 118, 42, .14);
-    --red: #c14a3b;   --red-bg: rgba(193, 74, 59, .13);
-    --gray: #8a877e;  --gray-bg: rgba(138, 135, 126, .14);
+    --red: #c14a3b; --red-bg: rgba(193, 74, 59, .13);
+    --gray: #8a877e; --gray-bg: rgba(138, 135, 126, .14);
     --shadow: 0 1px 2px rgba(40, 38, 34, .04), 0 1px 3px rgba(40, 38, 34, .05);
   }
   @media (prefers-color-scheme: dark) {
@@ -26,31 +22,27 @@
       --accent: #e08a6d; --accent-weak: rgba(224, 138, 109, .16);
       --green: #7bb47f; --green-bg: rgba(123, 180, 127, .15);
       --amber: #d6a054; --amber-bg: rgba(214, 160, 84, .15);
-      --red: #e08573;  --red-bg: rgba(224, 133, 115, .15);
+      --red: #e08573; --red-bg: rgba(224, 133, 115, .15);
       --gray: #a3a099; --gray-bg: rgba(163, 160, 153, .15);
       --shadow: none;
     }
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, sans-serif; -webkit-font-smoothing: antialiased; }
   .wrap { max-width: 420px; margin: 0 auto; padding: 20px 16px 40px; }
-  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
   .brand { display: flex; align-items: center; gap: 7px; font-weight: 600; font-size: 14px; letter-spacing: -.01em; }
   .brand .mark { color: var(--accent); font-size: 15px; }
-  .brand small { color: var(--mut); font-weight: 400; }
   .meta { color: var(--mut); font-size: 11px; font-variant-numeric: tabular-nums; }
-  h2 { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--mut); font-weight: 600; margin: 20px 2px 8px; }
+  h2 { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--mut); font-weight: 600; margin: 18px 2px 8px; }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
-  .pad { padding: 14px 15px; }
+  .pad { padding: 13px 15px; }
   .empty { color: var(--mut); font-size: 12.5px; }
 
   .bar { margin: 10px 0; }
   .bar:first-child { margin-top: 4px; }
-  .bar .lbl { display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 5px; color: var(--ink); }
+  .bar .lbl { display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 5px; }
   .bar .lbl .val { color: var(--mut); font-variant-numeric: tabular-nums; }
   .track { height: 6px; background: var(--accent-weak); border-radius: 6px; overflow: hidden; }
   .fill { height: 100%; background: var(--accent); border-radius: 6px; transition: width .4s ease; }
@@ -58,7 +50,22 @@
   .model { font-size: 11.5px; color: var(--mut); margin-bottom: 8px; }
   .foot { display: flex; justify-content: space-between; margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 11px; color: var(--mut); font-variant-numeric: tabular-nums; }
 
-  .srow { display: flex; align-items: center; gap: 10px; padding: 10px 15px; border-top: 1px solid var(--line); }
+  /* controls */
+  .ctl-lbl { font-size: 11px; color: var(--mut); margin-bottom: 6px; }
+  .seg { display: flex; background: var(--accent-weak); border-radius: 9px; padding: 3px; gap: 3px; margin-bottom: 4px; }
+  .seg button { flex: 1; border: 0; background: transparent; color: var(--mut); font: inherit; font-size: 11.5px; font-weight: 600; text-transform: capitalize; padding: 6px 0; border-radius: 6px; cursor: pointer; transition: all .12s; }
+  .seg button.on { background: var(--panel); color: var(--accent); box-shadow: var(--shadow); }
+  .row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; font-size: 12.5px; border-top: 1px solid var(--line); }
+  .sw { width: 34px; height: 20px; border-radius: 20px; background: var(--line); position: relative; cursor: pointer; transition: background .15s; flex: none; }
+  .sw.on { background: var(--accent); }
+  .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .15s; }
+  .sw.on::after { transform: translateX(14px); }
+  .slide { padding-bottom: 2px; }
+  .sval { color: var(--mut); font-variant-numeric: tabular-nums; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 4px; background: var(--accent-weak); margin: 3px 0 7px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+
+  .srow { display: flex; align-items: center; gap: 9px; padding: 10px 15px; border-top: 1px solid var(--line); }
   .srow:first-child { border-top: 0; }
   .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
   .dot.running { background: var(--accent); animation: pulse 1.7s infinite; }
@@ -66,9 +73,11 @@
   .dot.done { background: var(--green); }
   @keyframes pulse { 0%{box-shadow:0 0 0 0 var(--accent-weak)} 70%{box-shadow:0 0 0 6px transparent} 100%{box-shadow:0 0 0 0 transparent} }
   .sid { flex: 1; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mini { width: 64px; flex: none; }
+  .mini { width: 56px; flex: none; }
   .mini .bar { margin: 0; }
-  .swait { font-size: 10.5px; color: var(--mut); font-variant-numeric: tabular-nums; }
+  .bell { cursor: pointer; font-size: 12px; opacity: .8; flex: none; line-height: 1; }
+  .bell.muted { opacity: .45; }
+  .bell:hover { opacity: 1; }
 
   .chip { font-size: 10px; font-weight: 600; letter-spacing: .02em; padding: 2px 7px; border-radius: 20px; white-space: nowrap; background: var(--gray-bg); color: var(--gray); }
   .chip.VERIFIED { background: var(--green-bg); color: var(--green); }
@@ -89,11 +98,14 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="brand"><span class="mark">✳</span> cctower <small id="mode"></small></div>
+    <div class="brand"><span class="mark">✳</span> cctower <small id="mode" style="color:var(--mut);font-weight:400"></small></div>
     <div class="meta" id="meta">connecting…</div>
   </header>
 
   <div id="quotaZone"></div>
+
+  <h2>Controls</h2>
+  <div class="panel pad" id="controls"></div>
 
   <h2>Sessions</h2>
   <div class="panel" id="sessions"></div>
@@ -107,6 +119,17 @@
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
   const chipCls = (v) => (v === 'NO-OP' ? 'NOOP' : (v || 'NOOP'));
 
+  let cfg = null;
+  let controlsDone = false;
+  let lastSessions = [];
+
+  async function patchConfig(patch) {
+    try {
+      const r = await fetch('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+      if (r.ok) cfg = await r.json();
+    } catch { /* offline; local state already updated optimistically */ }
+  }
+
   function bar(label, pct, warnAt) {
     if (pct == null) return '';
     const w = Math.max(0, Math.min(100, pct));
@@ -116,9 +139,7 @@
   }
 
   function renderQuota(s, est) {
-    const snap = s || {};
-    const q = snap.quota || {};
-    const rows = [];
+    const snap = s || {}, q = snap.quota || {}, rows = [];
     if (typeof q.fiveHourPct === 'number')
       rows.push(bar('5-hour' + (q.fiveHourResets ? ' · resets ' + q.fiveHourResets : ''), q.fiveHourPct, 85));
     if (typeof q.weeklyPct === 'number') rows.push(bar('Weekly', q.weeklyPct, 85));
@@ -129,15 +150,63 @@
     $('quotaZone').innerHTML = `<h2>Quota</h2><div class="panel pad">${body}${foot}</div>`;
   }
 
+  function renderControls(c) {
+    const modes = ['observe', 'advise', 'gate'];
+    const seg = modes.map((m) => `<button data-mode="${m}" class="${c.mode === m ? 'on' : ''}">${m}</button>`).join('');
+    const n = c.notifications || {};
+    const tog = (label, on, key) => `<div class="row"><span>${esc(label)}</span><span class="sw ${on ? 'on' : ''}" data-tog="${key}"></span></div>`;
+    $('controls').innerHTML =
+      `<div class="ctl-lbl">Mode</div><div class="seg">${seg}</div>` +
+      tog('Done alerts', n.done, 'done') +
+      tog('Needs-input alerts', n.needsInput, 'needsInput') +
+      tog('Sound', n.sound, 'sound') +
+      tog('Prompt lint', c.lint, 'lint') +
+      `<div class="row slide"><span>Context warn</span><span class="sval" id="ctxv">${c.contextWarnPct}%</span></div>` +
+      `<input type="range" min="0" max="100" value="${c.contextWarnPct}" id="ctxr">` +
+      `<div class="row slide"><span>Quota warn</span><span class="sval" id="qv">${c.quotaWarnPct}%</span></div>` +
+      `<input type="range" min="0" max="100" value="${c.quotaWarnPct}" id="qr">`;
+
+    $('controls').querySelectorAll('.seg button').forEach((b) => b.onclick = () => {
+      cfg.mode = b.dataset.mode;
+      $('controls').querySelectorAll('.seg button').forEach((x) => x.classList.toggle('on', x === b));
+      patchConfig({ mode: b.dataset.mode });
+    });
+    $('controls').querySelectorAll('.sw[data-tog]').forEach((sw) => sw.onclick = () => {
+      const key = sw.dataset.tog, on = !sw.classList.contains('on');
+      sw.classList.toggle('on', on);
+      if (key === 'lint') { cfg.lint = on; patchConfig({ lint: on }); }
+      else { cfg.notifications = { ...cfg.notifications, [key]: on }; patchConfig({ notifications: { [key]: on } }); }
+    });
+    const ctxr = $('ctxr'), qr = $('qr');
+    ctxr.oninput = () => $('ctxv').textContent = ctxr.value + '%';
+    ctxr.onchange = () => { cfg.contextWarnPct = +ctxr.value; patchConfig({ contextWarnPct: +ctxr.value }); };
+    qr.oninput = () => $('qv').textContent = qr.value + '%';
+    qr.onchange = () => { cfg.quotaWarnPct = +qr.value; patchConfig({ quotaWarnPct: +qr.value }); };
+  }
+
+  $('sessions').addEventListener('click', (e) => {
+    const bell = e.target.closest('.bell');
+    if (!bell || !cfg) return;
+    const proj = bell.getAttribute('data-proj');
+    const set = new Set(cfg.mutedProjects || []);
+    set.has(proj) ? set.delete(proj) : set.add(proj);
+    cfg.mutedProjects = [...set];
+    patchConfig({ mutedProjects: cfg.mutedProjects });
+    renderSessions(lastSessions);
+  });
+
   function renderSessions(list) {
+    lastSessions = list;
     if (!list.length) { $('sessions').innerHTML = '<div class="pad empty">No sessions yet.</div>'; return; }
+    const muted = new Set((cfg && cfg.mutedProjects) || []);
     $('sessions').innerHTML = list.map((s) => {
+      const name = s.project || s.id;
       const chip = s.verdict ? `<span class="chip ${chipCls(s.verdict)}">${esc(s.verdict)}</span>` : '';
       const mini = s.contextPct != null ? `<div class="mini">${bar('', s.contextPct, 70)}</div>` : '';
-      const wait = s.waitedSeconds ? `${s.waitedSeconds}s` : '';
+      const isMuted = s.project && muted.has(s.project);
+      const bell = s.project ? `<span class="bell ${isMuted ? 'muted' : ''}" data-proj="${esc(s.project)}" title="${isMuted ? 'Unmute' : 'Mute'} ${esc(s.project)}">${isMuted ? '🔕' : '🔔'}</span>` : '';
       return `<div class="srow"><span class="dot ${s.status}"></span>
-        <span class="sid" title="${esc(s.id)}">${esc(s.id)}</span>
-        ${mini}${chip}<span class="swait">${wait}</span></div>`;
+        <span class="sid" title="${esc(s.id)}">${esc(name)}</span>${mini}${chip}${bell}</div>`;
     }).join('');
   }
 
@@ -146,8 +215,7 @@
     const card = e.target.closest('.card');
     if (!card) return;
     const file = card.getAttribute('data-file');
-    if (openCards.has(file)) openCards.delete(file);
-    else openCards.add(file);
+    openCards.has(file) ? openCards.delete(file) : openCards.add(file);
     card.classList.toggle('open');
   });
 
@@ -166,8 +234,9 @@
 
   async function tick() {
     try {
-      const r = await fetch('/state', { cache: 'no-store' });
-      const st = await r.json();
+      const st = await (await fetch('/state', { cache: 'no-store' })).json();
+      cfg = st.config || cfg;
+      if (cfg && !controlsDone) { renderControls(cfg); controlsDone = true; }
       $('mode').textContent = st.mode ? '· ' + st.mode : '';
       $('meta').textContent = 'updated ' + new Date(st.ts).toLocaleTimeString();
       renderQuota(st.snapshot, st.estimator);

@@ -9,8 +9,22 @@ const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
 const { collectState } = require('./state');
+const { updateConfig } = require('../state');
 
 const INDEX = path.join(__dirname, 'index.html');
+
+// Read a request body (capped) and resolve it as a string.
+function readBody(req) {
+  return new Promise((resolve) => {
+    let data = '';
+    req.on('data', (c) => {
+      data += c;
+      if (data.length > 1e5) req.destroy();
+    });
+    req.on('end', () => resolve(data));
+    req.on('error', () => resolve(''));
+  });
+}
 
 // Open the panel as a chromeless "app window" if a Chromium browser is around
 // (feels like a native pop-up, no tabs/address bar), else fall back to a normal
@@ -58,6 +72,19 @@ function start({ open = true, port = 0, host = '127.0.0.1' } = {}) {
       if (url === '/state') {
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify(collectState()));
+        return;
+      }
+      if (url === '/config' && req.method === 'POST') {
+        readBody(req).then((body) => {
+          try {
+            const next = updateConfig(JSON.parse(body || '{}'));
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(next));
+          } catch {
+            res.writeHead(400, { 'Content-Type': 'text/plain' });
+            res.end('bad request');
+          }
+        });
         return;
       }
       if (url === '/' || url === '/index.html') {

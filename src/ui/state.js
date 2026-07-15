@@ -29,6 +29,7 @@ function readSessions(p, snapshot) {
         const contextPct = snapshot && snapshot.session === id ? snapshot.contextPct : null;
         return {
           id,
+          project: s.project || null,
           status: sessionStatus(s),
           verdict: s.verdict || null,
           contextPct,
@@ -76,6 +77,7 @@ function collectState() {
   return {
     ts: new Date().toISOString(),
     mode: config.mode,
+    config,
     snapshot: snapshot || null,
     estimator: {
       correction: typeof cal.correction === 'number' ? cal.correction : 1,

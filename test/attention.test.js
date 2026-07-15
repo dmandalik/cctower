@@ -100,6 +100,15 @@ test('config toggle off silences the done notification but still accounts time',
   assert.ok(session(c.home, 'sess-attn-0001').waitedSeconds >= 2, 'time still accounted');
 });
 
+test('a muted project suppresses the toast', () => {
+  const c = ctx({
+    notifications: { done: true, needsInput: true, sound: false },
+    mutedProjects: ['algo-pipeline'],
+  });
+  const { notes } = run(readFix('notification-permission.json'), c);
+  assert.strictEqual(notes.length, 0, 'no toast for a muted project');
+});
+
 test('fails open on malformed stdin', () => {
   const c = ctx();
   const res = spawnSync('node', [ATTN], {

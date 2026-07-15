@@ -53,6 +53,31 @@ test('ensureConfig writes defaults once, then preserves edits', () => {
   assert.strictEqual(again.mode, 'gate', 'existing config must not be overwritten');
 });
 
+test('updateConfig whitelists keys, merges notifications, dedupes mutes', () => {
+  freshHome();
+  const next = state.updateConfig({
+    mode: 'gate',
+    contextWarnPct: 55,
+    notifications: { done: false },
+    mutedProjects: ['algo', 'algo', 'risk'],
+    bogus: 1,
+  });
+  assert.strictEqual(next.mode, 'gate');
+  assert.strictEqual(next.contextWarnPct, 55);
+  assert.strictEqual(next.notifications.done, false);
+  assert.strictEqual(next.notifications.needsInput, true); // preserved
+  assert.deepStrictEqual(next.mutedProjects, ['algo', 'risk']);
+  assert.strictEqual(next.bogus, undefined);
+  assert.strictEqual(state.loadConfig().mode, 'gate'); // persisted
+});
+
+test('updateConfig rejects a bad mode and clamps out-of-range percentages', () => {
+  freshHome();
+  const next = state.updateConfig({ mode: 'nope', contextWarnPct: 999 });
+  assert.strictEqual(next.mode, 'advise'); // unchanged
+  assert.strictEqual(next.contextWarnPct, 100); // clamped
+});
+
 test('loadConfig merges partial config over defaults', () => {
   freshHome();
   const p = statePaths();

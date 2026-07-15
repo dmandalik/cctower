@@ -14,6 +14,7 @@ const DEFAULT_CONFIG = {
   quotaWarnPct: 85,
   notifications: { done: true, needsInput: true, sound: false },
   lint: true,
+  mutedProjects: [], // project names whose notifications are silenced
 };
 
 // Create the directories cctower writes into. Safe to call repeatedly.
@@ -65,6 +66,32 @@ function ensureConfig() {
   return loadConfig();
 }
 
+// Apply a whitelisted patch to config.json and persist it. The UI control
+// panel calls this (via the server) so settings apply to every chat's next
+// hook fire. Ignores unknown/invalid keys — never writes arbitrary data.
+function updateConfig(patch) {
+  const cur = loadConfig();
+  const next = { ...cur };
+  const clampPct = (n) => Math.min(100, Math.max(0, Math.round(n)));
+
+  if (['observe', 'advise', 'gate'].includes(patch.mode)) next.mode = patch.mode;
+  if (Number.isFinite(patch.contextWarnPct)) next.contextWarnPct = clampPct(patch.contextWarnPct);
+  if (Number.isFinite(patch.quotaWarnPct)) next.quotaWarnPct = clampPct(patch.quotaWarnPct);
+  if (typeof patch.lint === 'boolean') next.lint = patch.lint;
+  if (patch.notifications && typeof patch.notifications === 'object') {
+    next.notifications = { ...cur.notifications };
+    for (const k of ['done', 'needsInput', 'sound']) {
+      if (typeof patch.notifications[k] === 'boolean') next.notifications[k] = patch.notifications[k];
+    }
+  }
+  if (Array.isArray(patch.mutedProjects)) {
+    next.mutedProjects = [...new Set(patch.mutedProjects.filter((x) => typeof x === 'string'))].slice(0, 200);
+  }
+
+  writeJson(statePaths().config, next);
+  return next;
+}
+
 // Append one JSON object as a line to the event log. Not atomic (appends
 // don't need to be); best-effort, so a logging failure never breaks a hook.
 function appendEvent(obj) {
@@ -85,5 +112,6 @@ module.exports = {
   readJson,
   loadConfig,
   ensureConfig,
+  updateConfig,
   appendEvent,
 };

@@ -50,13 +50,15 @@ function handleNotification(input, cfg) {
 
   const kind = classify(input);
   const urgent = kind === 'permission';
+  const proj = projectLabel(input);
+  sess.project = proj;
+  const muted = Array.isArray(cfg.mutedProjects) && cfg.mutedProjects.includes(proj);
 
   // First wait wins until Stop clears it.
   if (typeof sess.waitingSince !== 'number') sess.waitingSince = now;
 
-  let status = 'off';
-  if (cfg.notifications.needsInput && !inCooldown(sess, now)) {
-    const proj = projectLabel(input);
+  let status = muted ? 'muted' : 'off';
+  if (cfg.notifications.needsInput && !muted && !inCooldown(sess, now)) {
     const title = urgent ? `Claude needs permission · ${proj}` : `Claude is waiting · ${proj}`;
     const message =
       (input.message && String(input.message).slice(0, 180)) ||
@@ -87,9 +89,12 @@ function handleStop(input, cfg) {
     delete sess.waitingSince;
   }
 
-  let status = 'off';
-  if (cfg.notifications.done && !inCooldown(sess, now)) {
-    const proj = projectLabel(input);
+  const proj = projectLabel(input);
+  sess.project = proj;
+  const muted = Array.isArray(cfg.mutedProjects) && cfg.mutedProjects.includes(proj);
+
+  let status = muted ? 'muted' : 'off';
+  if (cfg.notifications.done && !muted && !inCooldown(sess, now)) {
     const verdict = sess.verdict || null; // land.js fills this in (Phase 3)
     const title = verdict ? `Claude done · ${proj} · ${verdict}` : `Claude done · ${proj}`;
     const message = verdict ? `Turn finished (${verdict}).` : 'Turn finished.';
