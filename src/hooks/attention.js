@@ -63,7 +63,7 @@ function handleNotification(input, cfg) {
     const message =
       (input.message && String(input.message).slice(0, 180)) ||
       (urgent ? 'A tool call needs your approval.' : 'Waiting for your input.');
-    status = notify({ title, message, urgent, sound: cfg.notifications.sound && urgent });
+    status = notify({ title, message, urgent, sound: cfg.notifications.sound && urgent, group: input.session_id });
     sess.lastNotifiedAt = now;
   }
 
@@ -98,7 +98,7 @@ function handleStop(input, cfg) {
     const verdict = sess.verdict || null; // land.js fills this in (Phase 3)
     const title = verdict ? `Claude done · ${proj} · ${verdict}` : `Claude done · ${proj}`;
     const message = verdict ? `Turn finished (${verdict}).` : 'Turn finished.';
-    status = notify({ title, message, sound: cfg.notifications.sound });
+    status = notify({ title, message, sound: cfg.notifications.sound, group: input.session_id });
     sess.lastNotifiedAt = now;
   }
 

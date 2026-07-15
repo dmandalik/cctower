@@ -41,13 +41,13 @@ function playSound() {
   }
 }
 
-function macNotify({ title, message, urgent, sound }) {
+function macNotify({ title, message, urgent, sound, group }) {
   if (hasTerminalNotifier()) {
-    execFileSync(
-      'terminal-notifier',
-      ['-title', String(title), '-message', String(message), '-group', 'cctower'],
-      { stdio: 'ignore', timeout: 3000 },
-    );
+    const args = ['-title', String(title), '-message', String(message)];
+    // Per-session group: newer alerts for the SAME chat replace the old one,
+    // but different chats each keep their own notification (no collapsing).
+    if (group) args.push('-group', `cctower-${String(group).replace(/[^\w.-]/g, '_')}`);
+    execFileSync('terminal-notifier', args, { stdio: 'ignore', timeout: 3000 });
   } else {
     const script = `display notification ${osaQuote(message)} with title ${osaQuote(title)}`;
     execFileSync('osascript', ['-e', script], { stdio: 'ignore', timeout: 3000 });
@@ -79,6 +79,7 @@ function notify(opts = {}) {
     message: opts.message || '',
     urgent: !!opts.urgent,
     sound: !!opts.sound,
+    group: opts.group || null,
   };
 
   const log = process.env.CCTOWER_NOTIFY_LOG;
