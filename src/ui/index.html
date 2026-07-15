@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>cctower</title>
+<style>
+  :root {
+    --bg: #0d1015;
+    --panel: #151a21;
+    --line: #232a34;
+    --ink: #e6e9ee;
+    --mut: #8b95a3;
+    --amber: #ffb000;
+    --green: #3fb950;
+    --blue: #58a6ff;
+    --red: #f85149;
+    --gray: #6e7681;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 28px 20px 60px; }
+  header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .brand { color: var(--amber); font-weight: 600; letter-spacing: .08em; font-size: 13px; }
+  .brand small { color: var(--mut); font-weight: 400; margin-left: 8px; letter-spacing: 0; }
+  .meta { color: var(--mut); font-size: 12px; font-variant-numeric: tabular-nums; }
+  h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--mut); font-weight: 600; margin: 28px 0 12px;
+  }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .pad { padding: 16px 18px; }
+  .muted { color: var(--mut); }
+
+  /* bars */
+  .bar { margin: 12px 0; }
+  .bar .lbl { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+  .bar .lbl .val { color: var(--mut); font-variant-numeric: tabular-nums; }
+  .track { height: 7px; background: #0a0d12; border-radius: 4px; overflow: hidden; }
+  .fill { height: 100%; background: var(--amber); border-radius: 4px; transition: width .4s ease; }
+  .fill.warn { background: var(--red); }
+
+  /* sessions */
+  .srow { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-top: 1px solid var(--line); }
+  .srow:first-child { border-top: 0; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .dot.running { background: var(--amber); box-shadow: 0 0 0 0 rgba(255,176,0,.6); animation: pulse 1.6s infinite; }
+  .dot.waiting { background: var(--blue); }
+  .dot.done { background: var(--green); }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(255,176,0,.5)} 70%{box-shadow:0 0 0 7px rgba(255,176,0,0)} 100%{box-shadow:0 0 0 0 rgba(255,176,0,0)} }
+  .sid { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mini { width: 90px; flex: none; }
+  .swait { font-size: 11px; color: var(--mut); font-variant-numeric: tabular-nums; min-width: 46px; text-align: right; }
+
+  /* chips */
+  .chip { font-size: 10.5px; font-weight: 600; letter-spacing: .04em; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+  .chip.VERIFIED { background: rgba(63,185,80,.15); color: var(--green); }
+  .chip.UNVERIFIED { background: rgba(255,176,0,.15); color: var(--amber); }
+  .chip.FAILED { background: rgba(248,81,73,.15); color: var(--red); }
+  .chip.NOOP, .chip { background: rgba(110,118,129,.18); color: var(--gray); }
+  .chip.VERIFIED, .chip.UNVERIFIED, .chip.FAILED { }
+
+  /* cards */
+  .card { border-top: 1px solid var(--line); }
+  .card:first-child { border-top: 0; }
+  .card .head { display: flex; align-items: center; gap: 10px; padding: 12px 18px; cursor: pointer; }
+  .card .head:hover { background: #1a2029; }
+  .card .ctitle { flex: 1; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .cwhen { font-size: 11px; color: var(--mut); font-variant-numeric: tabular-nums; }
+  .card pre { display: none; margin: 0; padding: 0 18px 16px; white-space: pre-wrap; word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #c9d2dd; }
+  .card.open pre { display: block; }
+  .empty { color: var(--mut); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">◈ CCTOWER <small id="mode"></small></div>
+    <div class="meta" id="meta">connecting…</div>
+  </header>
+
+  <div id="quotaZone"></div>
+
+  <h2>Sessions</h2>
+  <div class="panel" id="sessions"></div>
+
+  <h2>Landing cards</h2>
+  <div class="panel" id="cards"></div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+  const chipCls = (v) => (v === 'NO-OP' ? 'NOOP' : (v || 'NOOP'));
+
+  function bar(label, pct, warnAt) {
+    if (pct == null) return '';
+    const w = Math.max(0, Math.min(100, pct));
+    const warn = warnAt != null && pct >= warnAt ? ' warn' : '';
+    return `<div class="bar"><div class="lbl"><span>${esc(label)}</span><span class="val">${pct}%</span></div>
+      <div class="track"><div class="fill${warn}" style="width:${w}%"></div></div></div>`;
+  }
+
+  function renderQuota(s, est) {
+    const snap = s || {};
+    const q = snap.quota || {};
+    const rows = [];
+    if (typeof q.fiveHourPct === 'number')
+      rows.push(bar('5-hour' + (q.fiveHourResets ? ' · resets ' + q.fiveHourResets : ''), q.fiveHourPct, 85));
+    if (typeof q.weeklyPct === 'number') rows.push(bar('Weekly', q.weeklyPct, 85));
+    const head = snap.modelName || snap.model
+      ? `<div class="lbl" style="font-size:12px;color:var(--mut);margin-bottom:6px">${esc(snap.modelName || snap.model)}</div>` : '';
+    const body = rows.length ? head + rows.join('') : `<div class="empty">No quota telemetry yet — open a Claude session with the statusline installed.</div>`;
+    const acc = est.accuracy == null ? 'no data' : '±' + est.accuracy + '%';
+    const foot = `<div class="lbl" style="margin-top:12px;font-size:11px;color:var(--mut)">
+      <span>estimator ×${est.correction.toFixed(2)}</span><span>${acc} · ${est.samples} samples</span></div>`;
+    $('quotaZone').innerHTML = `<h2>Quota</h2><div class="panel pad">${body}${foot}</div>`;
+  }
+
+  function renderSessions(list) {
+    if (!list.length) { $('sessions').innerHTML = '<div class="pad empty">No sessions yet.</div>'; return; }
+    $('sessions').innerHTML = list.map((s) => {
+      const chip = s.verdict ? `<span class="chip ${chipCls(s.verdict)}">${esc(s.verdict)}</span>` : '';
+      const mini = s.contextPct != null ? `<div class="mini">${bar('', s.contextPct, 70)}</div>` : '<div class="mini"></div>';
+      const wait = s.waitedSeconds ? `${s.waitedSeconds}s idle` : '';
+      return `<div class="srow"><span class="dot ${s.status}"></span>
+        <span class="sid" title="${esc(s.id)}">${esc(s.id)}</span>
+        ${mini}${chip}<span class="swait">${wait}</span></div>`;
+    }).join('');
+  }
+
+  // Which cards are expanded — kept across polls so a 1s refresh doesn't
+  // collapse the card you just opened.
+  const openCards = new Set();
+  $('cards').addEventListener('click', (e) => {
+    const card = e.target.closest('.card');
+    if (!card) return;
+    const file = card.getAttribute('data-file');
+    if (openCards.has(file)) openCards.delete(file);
+    else openCards.add(file);
+    card.classList.toggle('open');
+  });
+
+  function renderCards(list) {
+    if (!list.length) { $('cards').innerHTML = '<div class="pad empty">No landing cards yet.</div>'; return; }
+    $('cards').innerHTML = list.map((c) => {
+      const title = `${c.session || 'session'} · ${c.verdict || '—'}`;
+      const opened = openCards.has(c.file) ? ' open' : '';
+      return `<div class="card${opened}" data-file="${esc(c.file)}"><div class="head">
+        <span class="chip ${chipCls(c.verdict)}">${esc(c.verdict || '—')}</span>
+        <span class="ctitle">${esc(title)}</span>
+        <span class="cwhen">${esc((c.when || '').replace('T',' ').replace(/\..*$/,''))}</span>
+      </div><pre>${esc(c.body)}</pre></div>`;
+    }).join('');
+  }
+
+  async function tick() {
+    try {
+      const r = await fetch('/state', { cache: 'no-store' });
+      const st = await r.json();
+      $('mode').textContent = st.mode ? '· ' + st.mode + ' mode' : '';
+      $('meta').textContent = 'updated ' + new Date(st.ts).toLocaleTimeString();
+      renderQuota(st.snapshot, st.estimator);
+      renderSessions(st.sessions || []);
+      renderCards(st.cards || []);
+    } catch {
+      $('meta').textContent = 'disconnected';
+    }
+  }
+  tick();
+  setInterval(tick, 1000);
+</script>
+</body>
+</html>

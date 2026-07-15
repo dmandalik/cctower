@@ -75,8 +75,10 @@ function main(argv) {
     case 'status':
       return cmdStatus();
     case 'ui':
+      require('../src/ui/server').start({ open: true, port: Number(process.env.CCTOWER_PORT) || 0 });
+      return null; // long-running server — keep the event loop alive
     case 'report':
-      console.log(`\`cctower ${cmd}\` arrives in a later phase.`);
+      console.log('`cctower report` arrives in a later phase.');
       return 0;
     case undefined:
     case '-h':
@@ -92,7 +94,9 @@ function main(argv) {
 
 // Fail open: never let cctower crash a shell. Log, exit 0, get out of the way.
 try {
-  process.exit(main(process.argv.slice(2)));
+  const code = main(process.argv.slice(2));
+  if (typeof code === 'number') process.exit(code);
+  // else: a long-running command (ui) — leave the event loop running.
 } catch (err) {
   console.error(`[cctower] ${err && err.message ? err.message : err}`);
   process.exit(0);
