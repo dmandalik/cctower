@@ -2,9 +2,18 @@
   "name": "cctower",
   "version": "0.0.1",
   "description": "Control tower for Claude Code - pre-flight token checks, attention alerts, and landing reports.",
-  "main": "index.js",
+  "bin": {
+    "cctower": "bin/cctower.js"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test"
+  },
+  "files": [
+    "bin/",
+    "src/"
+  ],
+  "engines": {
+    "node": ">=20"
   },
   "repository": {
     "type": "git",

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": ["Bash(git status)"]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [{ "type": "command", "command": "echo user-hook" }]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "my-own-statusline.sh"
+  }
+}
