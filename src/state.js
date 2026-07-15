@@ -58,6 +58,18 @@ function ensureConfig() {
   return loadConfig();
 }
 
+// Append one JSON object as a line to the event log. Not atomic (appends
+// don't need to be); best-effort, so a logging failure never breaks a hook.
+function appendEvent(obj) {
+  try {
+    const p = statePaths();
+    fs.mkdirSync(p.home, { recursive: true });
+    fs.appendFileSync(p.events, JSON.stringify(obj) + '\n');
+  } catch {
+    /* logging is best-effort */
+  }
+}
+
 module.exports = {
   DEFAULT_CONFIG,
   ensureDirs,
@@ -66,4 +78,5 @@ module.exports = {
   readJson,
   loadConfig,
   ensureConfig,
+  appendEvent,
 };

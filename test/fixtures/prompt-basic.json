@@ -1,0 +1,7 @@
+{
+  "session_id": "sess-basic-0001",
+  "transcript_path": "/tmp/cctower-nonexistent-transcript.jsonl",
+  "cwd": "/tmp",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "Add a retry wrapper around the Alpaca client's HTTP calls in src/club_quant/phase_1_data/providers/alpaca.py. It should retry on 429 and 5xx responses with exponential backoff (base 0.5s, up to 5 attempts), respect the Retry-After header when present, and give up cleanly with a logged warning after the final attempt. Keep the public function signatures unchanged so existing callers in the ingestion CLI keep working. Add a unit test in tests/test_alpaca_retry.py that monkeypatches the transport to return two 429s then a 200 and asserts the call succeeds after three attempts, plus a second test that asserts we stop after five failures. Make sure pytest passes and the new code stays under the module's existing lint config."
+}

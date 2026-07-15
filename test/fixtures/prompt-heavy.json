@@ -1,0 +1,7 @@
+{
+  "session_id": "sess-heavy-0002",
+  "transcript_path": "/tmp/cctower-nonexistent-transcript.jsonl",
+  "cwd": "/tmp",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "Refactor the entire data ingestion pipeline across all providers and rewrite the domain population layer to be faster."
+}

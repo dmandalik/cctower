@@ -1,0 +1,13 @@
+{
+  "ts": "2026-07-14T22:30:00.000Z",
+  "session": "sess-heavy-0002",
+  "model": "claude-opus-4-8",
+  "modelName": "Opus",
+  "contextPct": 82,
+  "contextSize": 200000,
+  "quota": {
+    "fiveHourPct": 90,
+    "weeklyPct": 40,
+    "fiveHourResets": "3:40pm"
+  }
+}

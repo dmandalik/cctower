@@ -1,0 +1,145 @@
+#!/usr/bin/env node
+'use strict';
+
+// Pre-flight gate (UserPromptSubmit). Estimates a prompt's cost, projects the
+// resulting context %, lints the prompt, and acts by mode:
+//   observe -> log only
+//   advise  -> print one compact line to stdout (injected as context)
+//   gate    -> exit 2 to block when projected context/quota cross thresholds
+// Budget < 100ms. Fail open: any error -> exit 0, get out of the way.
+
+const fs = require('fs');
+const path = require('path');
+const { execFileSync } = require('child_process');
+
+const { readStdinJson } = require('../io');
+const { statePaths } = require('../paths');
+const { loadConfig, readJson, writeJson, appendEvent } = require('../state');
+const { estimate, humanTokens } = require('../estimator');
+const { lint, isHeavy } = require('../lint');
+
+// Prompts containing this token always pass the gate (override hint).
+const FORCE = '!force';
+const NOISE_FLOOR = 250; // below this (and nothing flagged) advise stays silent.
+
+function gitRef(cwd) {
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: cwd || process.cwd(),
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return null;
+  }
+}
+
+function readTranscript(p) {
+  try {
+    if (p && fs.statSync(p).size < 4 * 1024 * 1024) return fs.readFileSync(p, 'utf8');
+  } catch {
+    /* absent or too big */
+  }
+  return '';
+}
+
+function correctionFactor() {
+  const c = readJson(statePaths().calibration);
+  return c && typeof c.correction === 'number' ? c.correction : 1;
+}
+
+// Build the advise line from whatever telemetry is available (feature-detect).
+function adviseLine({ est, projected, snapshot, lintNote }) {
+  const parts = [`~${humanTokens(est.low)}–${humanTokens(est.high)} tokens`];
+  if (projected != null) parts.push(`context → ${projected}%`);
+  if (snapshot && snapshot.quota && typeof snapshot.quota.fiveHourPct === 'number') {
+    const q = snapshot.quota;
+    const resets = q.fiveHourResets ? ` (resets ${q.fiveHourResets})` : '';
+    parts.push(`5h quota ${q.fiveHourPct}%${resets}`);
+  }
+  let line = `[cctower] ${parts.join(' · ')}`;
+  if (lintNote) line += `\n[cctower] ${lintNote}`;
+  return line;
+}
+
+function projectContext(snapshot, estHigh) {
+  if (!snapshot || typeof snapshot.contextPct !== 'number' || !snapshot.contextSize) {
+    return null;
+  }
+  return Math.round(snapshot.contextPct + (estHigh / snapshot.contextSize) * 100);
+}
+
+function run() {
+  const input = readStdinJson();
+  const prompt = typeof input.prompt === 'string' ? input.prompt : '';
+  const forced = prompt.includes(FORCE);
+
+  const cfg = loadConfig();
+  const snapshot = readJson(statePaths().snapshot);
+  const model = (snapshot && snapshot.model) || '';
+
+  const est = estimate({ text: prompt, model, correction: correctionFactor() });
+  const heavy = isHeavy(prompt, est.high);
+  const projected = projectContext(snapshot, est.high);
+
+  const note = cfg.lint
+    ? lint({ prompt, estHigh: est.high, heavy, model, transcript: readTranscript(input.transcript_path) })
+    : null;
+  const lintNote = note && note.note;
+
+  // Record this turn for the landing report (git ref + estimate).
+  if (input.session_id) {
+    const file = path.join(statePaths().sessions, `${input.session_id}.json`);
+    const prev = readJson(file, {}) || {};
+    writeJson(file, {
+      ...prev,
+      lastPrompt: { ts: new Date().toISOString(), estimate: est, gitRef: gitRef(input.cwd) },
+    });
+  }
+
+  appendEvent({
+    ts: new Date().toISOString(),
+    event: 'gate',
+    session: input.session_id || null,
+    mode: cfg.mode,
+    est: { low: est.low, high: est.high, content: est.content },
+    heavy,
+    projected,
+    lint: lintNote || null,
+  });
+
+  if (cfg.mode === 'observe') return 0;
+
+  // gate mode: block when a threshold is crossed and the user hasn't forced.
+  if (cfg.mode === 'gate' && !forced) {
+    const overContext = projected != null && projected >= cfg.contextWarnPct;
+    const quotaPct = snapshot && snapshot.quota && snapshot.quota.fiveHourPct;
+    const overQuota = typeof quotaPct === 'number' && quotaPct >= cfg.quotaWarnPct;
+    if (overContext || overQuota) {
+      const why = overContext
+        ? `projected context ${projected}% ≥ ${cfg.contextWarnPct}%`
+        : `5h quota ${quotaPct}% ≥ ${cfg.quotaWarnPct}%`;
+      process.stderr.write(
+        `[cctower] blocked: ${why}. Resend with \`${FORCE}\` in the prompt to override.\n`,
+      );
+      return 2;
+    }
+  }
+
+  // advise (and gate when it doesn't block): print only when noteworthy.
+  const noteworthy =
+    !!lintNote ||
+    heavy ||
+    est.high >= NOISE_FLOOR ||
+    (projected != null && projected >= cfg.contextWarnPct);
+  if (noteworthy) process.stdout.write(adviseLine({ est, projected, snapshot, lintNote }) + '\n');
+
+  return 0;
+}
+
+try {
+  process.exit(run());
+} catch {
+  process.exit(0); // fail open
+}

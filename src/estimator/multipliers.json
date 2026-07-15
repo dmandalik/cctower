@@ -1,0 +1,19 @@
+{
+  "_comment": "v0.1 research-derived constants. Base o200k_base count x multiplier ~= real Claude tokens. Replaced later by the calibration harness; keep the numbers here only.",
+  "newGen": {
+    "prose": 1.4,
+    "python": 1.5,
+    "js": 1.6,
+    "json": 1.4,
+    "markdown": 1.35,
+    "cjk": 1.45
+  },
+  "oldGen": {
+    "prose": 1.1,
+    "code": 1.2,
+    "json": 1.1,
+    "markdown": 1.1,
+    "cjk": 1.45
+  },
+  "highBias": 1.15
+}

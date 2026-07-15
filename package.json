@@ -32,5 +32,8 @@
   "bugs": {
     "url": "https://github.com/dmandalik/cctower/issues"
   },
-  "homepage": "https://github.com/dmandalik/cctower#readme"
+  "homepage": "https://github.com/dmandalik/cctower#readme",
+  "dependencies": {
+    "gpt-tokenizer": "^3.4.0"
+  }
 }
