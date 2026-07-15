@@ -7,6 +7,7 @@ const fs = require('fs');
 const { statePaths, claudeSettingsPath, home } = require('./paths');
 const { readJson, loadConfig } = require('./state');
 const { isInstalled } = require('./installer');
+const { accuracy } = require('./calibrate');
 
 function collect() {
   const p = statePaths();
@@ -29,6 +30,7 @@ function collect() {
     snapshot,
     correction,
     calibrationPairs: (calibration && calibration.pairs && calibration.pairs.length) || 0,
+    accuracy: accuracy(calibration),
   };
 }
 
@@ -49,8 +51,9 @@ function render(s) {
       ? `  last snapshot ${s.snapshot.model || '?'} · ctx ${s.snapshot.contextPct ?? '?'}%`
       : '  last snapshot none yet',
   );
+  const acc = s.accuracy == null ? 'no data yet' : `±${s.accuracy}% median error`;
   lines.push(
-    `  estimator     correction x${s.correction.toFixed(2)} (${s.calibrationPairs} samples)`,
+    `  estimator     correction x${s.correction.toFixed(2)} · ${acc} (${s.calibrationPairs} samples)`,
   );
   return lines.join('\n');
 }
