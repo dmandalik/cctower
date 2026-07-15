@@ -77,9 +77,11 @@ function main(argv) {
     case 'ui':
       require('../src/ui/server').start({ open: true, port: Number(process.env.CCTOWER_PORT) || 0 });
       return null; // long-running server — keep the event loop alive
-    case 'report':
-      console.log('`cctower report` arrives in a later phase.');
+    case 'report': {
+      const report = require('../src/report');
+      console.log(report.render(report.collect()));
       return 0;
+    }
     case undefined:
     case '-h':
     case '--help':
