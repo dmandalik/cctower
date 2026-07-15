@@ -6,85 +6,90 @@
 <title>cctower</title>
 <style>
   :root {
-    --bg: #0d1015;
-    --panel: #151a21;
-    --line: #232a34;
-    --ink: #e6e9ee;
-    --mut: #8b95a3;
-    --amber: #ffb000;
-    --green: #3fb950;
-    --blue: #58a6ff;
-    --red: #f85149;
-    --gray: #6e7681;
+    --bg: #f4f2ec;
+    --panel: #fdfcfa;
+    --line: #e7e3d9;
+    --ink: #2a2824;
+    --mut: #8a877e;
+    --accent: #d97757;
+    --accent-weak: rgba(217, 119, 87, .12);
+    --green: #4f8a54; --green-bg: rgba(79, 138, 84, .13);
+    --amber: #b5762a; --amber-bg: rgba(181, 118, 42, .14);
+    --red: #c14a3b;   --red-bg: rgba(193, 74, 59, .13);
+    --gray: #8a877e;  --gray-bg: rgba(138, 135, 126, .14);
+    --shadow: 0 1px 2px rgba(40, 38, 34, .04), 0 1px 3px rgba(40, 38, 34, .05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #262624; --panel: #30302e; --line: #3c3b38;
+      --ink: #ecebe4; --mut: #a3a099;
+      --accent: #e08a6d; --accent-weak: rgba(224, 138, 109, .16);
+      --green: #7bb47f; --green-bg: rgba(123, 180, 127, .15);
+      --amber: #d6a054; --amber-bg: rgba(214, 160, 84, .15);
+      --red: #e08573;  --red-bg: rgba(224, 133, 115, .15);
+      --gray: #a3a099; --gray-bg: rgba(163, 160, 153, .15);
+      --shadow: none;
+    }
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--ink);
-    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 640px; margin: 0 auto; padding: 28px 20px 60px; }
-  header {
-    display: flex; align-items: baseline; justify-content: space-between;
-    margin-bottom: 24px;
-  }
-  .brand { color: var(--amber); font-weight: 600; letter-spacing: .08em; font-size: 13px; }
-  .brand small { color: var(--mut); font-weight: 400; margin-left: 8px; letter-spacing: 0; }
-  .meta { color: var(--mut); font-size: 12px; font-variant-numeric: tabular-nums; }
-  h2 {
-    font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
-    color: var(--mut); font-weight: 600; margin: 28px 0 12px;
-  }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
-  .pad { padding: 16px 18px; }
-  .muted { color: var(--mut); }
+  .wrap { max-width: 420px; margin: 0 auto; padding: 20px 16px 40px; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .brand { display: flex; align-items: center; gap: 7px; font-weight: 600; font-size: 14px; letter-spacing: -.01em; }
+  .brand .mark { color: var(--accent); font-size: 15px; }
+  .brand small { color: var(--mut); font-weight: 400; }
+  .meta { color: var(--mut); font-size: 11px; font-variant-numeric: tabular-nums; }
+  h2 { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--mut); font-weight: 600; margin: 20px 2px 8px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+  .pad { padding: 14px 15px; }
+  .empty { color: var(--mut); font-size: 12.5px; }
 
-  /* bars */
-  .bar { margin: 12px 0; }
-  .bar .lbl { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+  .bar { margin: 10px 0; }
+  .bar:first-child { margin-top: 4px; }
+  .bar .lbl { display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 5px; color: var(--ink); }
   .bar .lbl .val { color: var(--mut); font-variant-numeric: tabular-nums; }
-  .track { height: 7px; background: #0a0d12; border-radius: 4px; overflow: hidden; }
-  .fill { height: 100%; background: var(--amber); border-radius: 4px; transition: width .4s ease; }
+  .track { height: 6px; background: var(--accent-weak); border-radius: 6px; overflow: hidden; }
+  .fill { height: 100%; background: var(--accent); border-radius: 6px; transition: width .4s ease; }
   .fill.warn { background: var(--red); }
+  .model { font-size: 11.5px; color: var(--mut); margin-bottom: 8px; }
+  .foot { display: flex; justify-content: space-between; margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 11px; color: var(--mut); font-variant-numeric: tabular-nums; }
 
-  /* sessions */
-  .srow { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-top: 1px solid var(--line); }
+  .srow { display: flex; align-items: center; gap: 10px; padding: 10px 15px; border-top: 1px solid var(--line); }
   .srow:first-child { border-top: 0; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-  .dot.running { background: var(--amber); box-shadow: 0 0 0 0 rgba(255,176,0,.6); animation: pulse 1.6s infinite; }
-  .dot.waiting { background: var(--blue); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .dot.running { background: var(--accent); animation: pulse 1.7s infinite; }
+  .dot.waiting { background: var(--amber); }
   .dot.done { background: var(--green); }
-  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(255,176,0,.5)} 70%{box-shadow:0 0 0 7px rgba(255,176,0,0)} 100%{box-shadow:0 0 0 0 rgba(255,176,0,0)} }
-  .sid { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mini { width: 90px; flex: none; }
-  .swait { font-size: 11px; color: var(--mut); font-variant-numeric: tabular-nums; min-width: 46px; text-align: right; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 var(--accent-weak)} 70%{box-shadow:0 0 0 6px transparent} 100%{box-shadow:0 0 0 0 transparent} }
+  .sid { flex: 1; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mini { width: 64px; flex: none; }
+  .mini .bar { margin: 0; }
+  .swait { font-size: 10.5px; color: var(--mut); font-variant-numeric: tabular-nums; }
 
-  /* chips */
-  .chip { font-size: 10.5px; font-weight: 600; letter-spacing: .04em; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
-  .chip.VERIFIED { background: rgba(63,185,80,.15); color: var(--green); }
-  .chip.UNVERIFIED { background: rgba(255,176,0,.15); color: var(--amber); }
-  .chip.FAILED { background: rgba(248,81,73,.15); color: var(--red); }
-  .chip.NOOP, .chip { background: rgba(110,118,129,.18); color: var(--gray); }
-  .chip.VERIFIED, .chip.UNVERIFIED, .chip.FAILED { }
+  .chip { font-size: 10px; font-weight: 600; letter-spacing: .02em; padding: 2px 7px; border-radius: 20px; white-space: nowrap; background: var(--gray-bg); color: var(--gray); }
+  .chip.VERIFIED { background: var(--green-bg); color: var(--green); }
+  .chip.UNVERIFIED { background: var(--amber-bg); color: var(--amber); }
+  .chip.FAILED { background: var(--red-bg); color: var(--red); }
 
-  /* cards */
   .card { border-top: 1px solid var(--line); }
   .card:first-child { border-top: 0; }
-  .card .head { display: flex; align-items: center; gap: 10px; padding: 12px 18px; cursor: pointer; }
-  .card .head:hover { background: #1a2029; }
+  .card .head { display: flex; align-items: center; gap: 9px; padding: 11px 15px; cursor: pointer; }
+  .card .head:hover { background: var(--accent-weak); }
   .card .ctitle { flex: 1; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .card .cwhen { font-size: 11px; color: var(--mut); font-variant-numeric: tabular-nums; }
-  .card pre { display: none; margin: 0; padding: 0 18px 16px; white-space: pre-wrap; word-break: break-word;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #c9d2dd; }
+  .card .cwhen { font-size: 10.5px; color: var(--mut); font-variant-numeric: tabular-nums; }
+  .card pre { display: none; margin: 0; padding: 2px 15px 14px; white-space: pre-wrap; word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; line-height: 1.55; color: var(--ink); }
   .card.open pre { display: block; }
-  .empty { color: var(--mut); font-size: 13px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <div class="brand">◈ CCTOWER <small id="mode"></small></div>
+    <div class="brand"><span class="mark">✳</span> cctower <small id="mode"></small></div>
     <div class="meta" id="meta">connecting…</div>
   </header>
 
@@ -106,8 +111,8 @@
     if (pct == null) return '';
     const w = Math.max(0, Math.min(100, pct));
     const warn = warnAt != null && pct >= warnAt ? ' warn' : '';
-    return `<div class="bar"><div class="lbl"><span>${esc(label)}</span><span class="val">${pct}%</span></div>
-      <div class="track"><div class="fill${warn}" style="width:${w}%"></div></div></div>`;
+    const head = label ? `<div class="lbl"><span>${esc(label)}</span><span class="val">${pct}%</span></div>` : '';
+    return `<div class="bar">${head}<div class="track"><div class="fill${warn}" style="width:${w}%"></div></div></div>`;
   }
 
   function renderQuota(s, est) {
@@ -117,12 +122,10 @@
     if (typeof q.fiveHourPct === 'number')
       rows.push(bar('5-hour' + (q.fiveHourResets ? ' · resets ' + q.fiveHourResets : ''), q.fiveHourPct, 85));
     if (typeof q.weeklyPct === 'number') rows.push(bar('Weekly', q.weeklyPct, 85));
-    const head = snap.modelName || snap.model
-      ? `<div class="lbl" style="font-size:12px;color:var(--mut);margin-bottom:6px">${esc(snap.modelName || snap.model)}</div>` : '';
-    const body = rows.length ? head + rows.join('') : `<div class="empty">No quota telemetry yet — open a Claude session with the statusline installed.</div>`;
+    const model = (snap.modelName || snap.model) ? `<div class="model">${esc(snap.modelName || snap.model)}</div>` : '';
+    const body = rows.length ? model + rows.join('') : `<div class="empty">No quota data — Claude Code isn't reporting 5h/weekly limits to the statusline.</div>`;
     const acc = est.accuracy == null ? 'no data' : '±' + est.accuracy + '%';
-    const foot = `<div class="lbl" style="margin-top:12px;font-size:11px;color:var(--mut)">
-      <span>estimator ×${est.correction.toFixed(2)}</span><span>${acc} · ${est.samples} samples</span></div>`;
+    const foot = `<div class="foot"><span>estimator ×${est.correction.toFixed(2)}</span><span>${acc} · ${est.samples} samples</span></div>`;
     $('quotaZone').innerHTML = `<h2>Quota</h2><div class="panel pad">${body}${foot}</div>`;
   }
 
@@ -130,16 +133,14 @@
     if (!list.length) { $('sessions').innerHTML = '<div class="pad empty">No sessions yet.</div>'; return; }
     $('sessions').innerHTML = list.map((s) => {
       const chip = s.verdict ? `<span class="chip ${chipCls(s.verdict)}">${esc(s.verdict)}</span>` : '';
-      const mini = s.contextPct != null ? `<div class="mini">${bar('', s.contextPct, 70)}</div>` : '<div class="mini"></div>';
-      const wait = s.waitedSeconds ? `${s.waitedSeconds}s idle` : '';
+      const mini = s.contextPct != null ? `<div class="mini">${bar('', s.contextPct, 70)}</div>` : '';
+      const wait = s.waitedSeconds ? `${s.waitedSeconds}s` : '';
       return `<div class="srow"><span class="dot ${s.status}"></span>
         <span class="sid" title="${esc(s.id)}">${esc(s.id)}</span>
         ${mini}${chip}<span class="swait">${wait}</span></div>`;
     }).join('');
   }
 
-  // Which cards are expanded — kept across polls so a 1s refresh doesn't
-  // collapse the card you just opened.
   const openCards = new Set();
   $('cards').addEventListener('click', (e) => {
     const card = e.target.closest('.card');
@@ -167,7 +168,7 @@
     try {
       const r = await fetch('/state', { cache: 'no-store' });
       const st = await r.json();
-      $('mode').textContent = st.mode ? '· ' + st.mode + ' mode' : '';
+      $('mode').textContent = st.mode ? '· ' + st.mode : '';
       $('meta').textContent = 'updated ' + new Date(st.ts).toLocaleTimeString();
       renderQuota(st.snapshot, st.estimator);
       renderSessions(st.sessions || []);

@@ -52,7 +52,7 @@ test('server serves /state JSON and the index page', async () => {
     const pageRes = await fetch(`${base}/`);
     assert.match(pageRes.headers.get('content-type'), /text\/html/);
     const html = await pageRes.text();
-    assert.match(html, /CCTOWER/);
+    assert.match(html, /cctower/i);
     assert.match(html, /\/state/);
 
     const missing = await fetch(`${base}/nope`);

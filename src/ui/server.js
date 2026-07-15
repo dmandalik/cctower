@@ -18,7 +18,7 @@ const INDEX = path.join(__dirname, 'index.html');
 // — the URL is always printed so the user can open it themselves.
 function openAppWindow(url) {
   const app = `--app=${url}`;
-  const size = '--window-size=760,920';
+  const size = '--window-size=440,780';
   let candidates;
   if (process.platform === 'darwin') {
     const chromium = (name) => ['open', ['-na', name, '--args', app, size]];
