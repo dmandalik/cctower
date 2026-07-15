@@ -68,6 +68,28 @@ function readCards(p) {
   }
 }
 
+// The most recent gate event, so the widget can show a live pre-flight
+// readout (the advise line the desktop app injects into context but doesn't
+// display to the user).
+function lastGate(p) {
+  try {
+    const lines = fs.readFileSync(p.events, 'utf8').split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].trim()) continue;
+      let e;
+      try {
+        e = JSON.parse(lines[i]);
+      } catch {
+        continue;
+      }
+      if (e.event === 'gate') return { ts: e.ts, est: e.est, heavy: e.heavy, projected: e.projected, lint: e.lint };
+    }
+  } catch {
+    /* no events yet */
+  }
+  return null;
+}
+
 function collectState() {
   const p = statePaths();
   const snapshot = readJson(p.snapshot);
@@ -78,6 +100,7 @@ function collectState() {
     ts: new Date().toISOString(),
     mode: config.mode,
     config,
+    preflight: lastGate(p),
     snapshot: snapshot || null,
     estimator: {
       correction: typeof cal.correction === 'number' ? cal.correction : 1,

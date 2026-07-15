@@ -50,6 +50,13 @@
   .model { font-size: 11.5px; color: var(--mut); margin-bottom: 8px; }
   .foot { display: flex; justify-content: space-between; margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 11px; color: var(--mut); font-variant-numeric: tabular-nums; }
 
+  /* live pre-flight banner */
+  .pf { background: var(--accent-weak); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; margin-bottom: 4px; }
+  .pf .pf-main { font-size: 12.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .pf .pf-main b { color: var(--accent); font-weight: 600; }
+  .pf .pf-lint { font-size: 11.5px; color: var(--amber); margin-top: 4px; }
+  .pf .pf-idle { font-size: 12px; color: var(--mut); }
+
   /* controls */
   .ctl-lbl { font-size: 11px; color: var(--mut); margin-bottom: 6px; }
   .seg { display: flex; background: var(--accent-weak); border-radius: 9px; padding: 3px; gap: 3px; margin-bottom: 4px; }
@@ -102,6 +109,8 @@
     <div class="meta" id="meta">connecting…</div>
   </header>
 
+  <div id="preflight"></div>
+
   <div id="quotaZone"></div>
 
   <h2>Controls</h2>
@@ -136,6 +145,17 @@
     const warn = warnAt != null && pct >= warnAt ? ' warn' : '';
     const head = label ? `<div class="lbl"><span>${esc(label)}</span><span class="val">${pct}%</span></div>` : '';
     return `<div class="bar">${head}<div class="track"><div class="fill${warn}" style="width:${w}%"></div></div></div>`;
+  }
+
+  function renderPreflight(g, mode) {
+    if (!g || !g.est) { $('preflight').innerHTML = ''; return; }
+    const parts = [`<b>~${g.est.low}–${g.est.high}</b> tokens`];
+    if (g.projected != null) parts.push(`ctx → ${g.projected}%`);
+    if (g.est.content && g.est.content !== 'prose') parts.push(g.est.content);
+    if (g.heavy) parts.push('heavy');
+    const silent = mode === 'observe' ? ' <span class="pf-idle">(observe — silent)</span>' : '';
+    const lint = g.lint ? `<div class="pf-lint">${esc(g.lint)}</div>` : '';
+    $('preflight').innerHTML = `<div class="pf"><div class="pf-main">last prompt · ${parts.join(' · ')}${silent}</div>${lint}</div>`;
   }
 
   function renderQuota(s, est) {
@@ -239,6 +259,7 @@
       if (cfg && !controlsDone) { renderControls(cfg); controlsDone = true; }
       $('mode').textContent = st.mode ? '· ' + st.mode : '';
       $('meta').textContent = 'updated ' + new Date(st.ts).toLocaleTimeString();
+      renderPreflight(st.preflight, st.mode);
       renderQuota(st.snapshot, st.estimator);
       renderSessions(st.sessions || []);
       renderCards(st.cards || []);

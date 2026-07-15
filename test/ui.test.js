@@ -22,6 +22,10 @@ fs.writeFileSync(path.join(dir, 'calibration.json'), JSON.stringify({ pairs: [{ 
 fs.writeFileSync(path.join(dir, 'sessions', 'sess-a.json'), JSON.stringify({ verdict: 'VERIFIED', waitedSeconds: 12 }));
 fs.writeFileSync(path.join(dir, 'sessions', 'sess-b.json'), JSON.stringify({ waitingSince: Date.now() }));
 fs.writeFileSync(path.join(dir, 'cards', 'sess-a-1.md'), '# cctower landing report\n\n**Verdict:** VERIFIED\n**When:** 2026-07-15T10:00:00Z\n**Session:** sess-a\n');
+fs.writeFileSync(
+  path.join(dir, 'events.ndjson'),
+  JSON.stringify({ ts: '2026-07-15T10:00:00Z', event: 'gate', est: { low: 98, high: 113, content: 'prose' }, heavy: false, projected: 42, lint: 'premium model for a small prompt' }) + '\n',
+);
 
 const { collectState } = require('../src/ui/state');
 const { start } = require('../src/ui/server');
@@ -37,6 +41,8 @@ test('collectState reports snapshot, sessions, cards, estimator', () => {
   assert.strictEqual(a.contextPct, 42); // matches snapshot.session
   assert.strictEqual(b.status, 'waiting');
   assert.strictEqual(st.cards[0].verdict, 'VERIFIED');
+  assert.strictEqual(st.preflight.est.high, 113); // last gate event surfaced
+  assert.match(st.preflight.lint, /premium model/);
 });
 
 test('server serves /state JSON and the index page', async () => {
