@@ -8,7 +8,7 @@
 // Test/dev escape hatch: if CCTOWER_NOTIFY_LOG is set, notifications are
 // appended there as JSON instead of hitting the OS, so tests never toast.
 
-const { execFileSync } = require('child_process');
+const { execFileSync, spawn } = require('child_process');
 const fs = require('fs');
 
 // Quote a string for an AppleScript literal.
@@ -16,10 +16,45 @@ function osaQuote(s) {
   return '"' + String(s).replace(/(["\\])/g, '\\$1') + '"';
 }
 
-function macNotify({ title, message, sound }) {
-  let script = `display notification ${osaQuote(message)} with title ${osaQuote(title)}`;
-  if (sound) script += ' sound name "Ping"';
-  execFileSync('osascript', ['-e', script], { stdio: 'ignore', timeout: 3000 });
+// terminal-notifier is far more reliable than osascript (its own notification
+// permission, doesn't depend on Script Editor being enabled). Detect once.
+let _tn = null;
+function hasTerminalNotifier() {
+  if (_tn === null) {
+    try {
+      execFileSync('which', ['terminal-notifier'], { stdio: 'ignore' });
+      _tn = true;
+    } catch {
+      _tn = false;
+    }
+  }
+  return _tn;
+}
+
+// Guaranteed audible ping — plays even when notification *display* is blocked.
+// Non-blocking so the hook returns immediately.
+function playSound() {
+  try {
+    spawn('afplay', ['/System/Library/Sounds/Ping.aiff'], { stdio: 'ignore', detached: true }).unref();
+  } catch {
+    /* no afplay */
+  }
+}
+
+function macNotify({ title, message, urgent, sound }) {
+  if (hasTerminalNotifier()) {
+    execFileSync(
+      'terminal-notifier',
+      ['-title', String(title), '-message', String(message), '-group', 'cctower'],
+      { stdio: 'ignore', timeout: 3000 },
+    );
+  } else {
+    const script = `display notification ${osaQuote(message)} with title ${osaQuote(title)}`;
+    execFileSync('osascript', ['-e', script], { stdio: 'ignore', timeout: 3000 });
+  }
+  // Sound: always for urgent, or when the sound toggle is on. Independent of
+  // whether the visual toast is allowed, so the user still gets a signal.
+  if (sound || urgent) playSound();
 }
 
 function linuxNotify({ title, message }) {

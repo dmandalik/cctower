@@ -10,6 +10,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { collectState } = require('./state');
 const { updateConfig } = require('../state');
+const { statePaths } = require('../paths');
 
 const INDEX = path.join(__dirname, 'index.html');
 
@@ -31,23 +32,32 @@ function readBody(req) {
 // browser tab. Each candidate is tried in order until one launches. Best-effort
 // — the URL is always printed so the user can open it themselves.
 function openAppWindow(url) {
-  const app = `--app=${url}`;
-  const size = '--window-size=440,780';
+  // A dedicated profile dir makes Chrome spawn a fresh instance that actually
+  // honors --window-size (it ignores the flag when reusing your main profile).
+  // Persisted under the state dir so it remembers a size you set later.
+  const profile = path.join(statePaths().home, 'ui-chrome');
+  const flags = [
+    `--app=${url}`,
+    `--user-data-dir=${profile}`,
+    '--window-size=384,640',
+    '--no-first-run',
+    '--no-default-browser-check',
+  ];
   let candidates;
   if (process.platform === 'darwin') {
-    const chromium = (name) => ['open', ['-na', name, '--args', app, size]];
-    candidates = [chromium('Google Chrome'), chromium('Microsoft Edge'), chromium('Brave Browser'), ['open', [url]]];
+    const chromium = (name) => ['open', ['-na', name, '--args', ...flags]];
+    candidates = [chromium('Google Chrome'), chromium('Brave Browser'), chromium('Microsoft Edge'), ['open', [url]]];
   } else if (process.platform === 'win32') {
     candidates = [
-      ['cmd', ['/c', 'start', '', 'chrome', app, size]],
-      ['cmd', ['/c', 'start', '', 'msedge', app, size]],
+      ['cmd', ['/c', 'start', '', 'chrome', ...flags]],
+      ['cmd', ['/c', 'start', '', 'msedge', ...flags]],
       ['cmd', ['/c', 'start', '', url]],
     ];
   } else {
     candidates = [
-      ['google-chrome', [app, size]],
-      ['chromium', [app, size]],
-      ['microsoft-edge', [app, size]],
+      ['google-chrome', flags],
+      ['chromium', flags],
+      ['microsoft-edge', flags],
       ['xdg-open', [url]],
     ];
   }
