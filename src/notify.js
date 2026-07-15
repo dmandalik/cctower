@@ -52,9 +52,9 @@ function macNotify({ title, message, urgent, sound, group }) {
     const script = `display notification ${osaQuote(message)} with title ${osaQuote(title)}`;
     execFileSync('osascript', ['-e', script], { stdio: 'ignore', timeout: 3000 });
   }
-  // Sound: always for urgent, or when the sound toggle is on. Independent of
-  // whether the visual toast is allowed, so the user still gets a signal.
-  if (sound || urgent) playSound();
+  // Sound follows the toggle for every alert type (independent of whether the
+  // visual toast is allowed, so the user still gets a signal).
+  if (sound) playSound();
 }
 
 function linuxNotify({ title, message }) {

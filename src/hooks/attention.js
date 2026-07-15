@@ -63,7 +63,7 @@ function handleNotification(input, cfg) {
     const message =
       (input.message && String(input.message).slice(0, 180)) ||
       (urgent ? 'A tool call needs your approval.' : 'Waiting for your input.');
-    status = notify({ title, message, urgent, sound: cfg.notifications.sound && urgent, group: input.session_id });
+    status = notify({ title, message, urgent, sound: cfg.notifications.sound, group: input.session_id });
     sess.lastNotifiedAt = now;
   }
 
