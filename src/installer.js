@@ -21,12 +21,17 @@ const HOOK_EVENTS = {
   Stop: ['land.js', 'attention.js'],
 };
 
+// Absolute path to the node that ran the installer, so hooks don't depend on
+// `node` being on the PATH of the shell Claude Code spawns them in (a common
+// silent-failure trap with nvm/conda/homebrew). Quoted in case it has spaces.
+const NODE = process.execPath.includes(' ') ? `"${process.execPath}"` : process.execPath;
+
 function hookCommand(file) {
-  return `node ${path.join(ROOT, 'src', 'hooks', file)}`;
+  return `${NODE} ${path.join(ROOT, 'src', 'hooks', file)}`;
 }
 
 function statuslineCommand() {
-  return `node ${path.join(ROOT, 'src', 'statusline.js')}`;
+  return `${NODE} ${path.join(ROOT, 'src', 'statusline.js')}`;
 }
 
 // A command belongs to cctower iff it points back into this install.

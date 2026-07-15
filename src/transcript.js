@@ -110,26 +110,22 @@ function humanCount(turn) {
   return turn.filter(isHumanPrompt).length;
 }
 
-// input + cache_creation + cache_read (the "context in" for a response).
-function usageIn(u) {
-  if (!u) return null;
-  return (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
-}
-
-// Actual input tokens attributable to this turn: the delta between this turn's
-// last assistant usage and the last assistant usage of the previous turn.
-function turnInputDelta(entries) {
+// New (non-cached) input tokens attributable to this turn's prompt: the first
+// assistant response after the human prompt, counting input_tokens +
+// cache_creation but NOT cache_read. Cached context re-reads (usually the bulk
+// of the tokens) aren't caused by the new prompt, so including them would
+// dwarf the estimate and produce nonsense ratios. For a cached conversation
+// this approximates the prompt's own token cost.
+function turnNewInput(entries) {
   const humanIdx = lastHumanIndex(entries);
-  const usages = [];
-  entries.forEach((e, i) => {
-    if (isAssistant(e) && e.message.usage) usages.push({ i, sum: usageIn(e.message.usage) });
-  });
-  if (!usages.length) return null;
-  const cur = usages[usages.length - 1].sum;
-  if (cur == null) return null;
-  const prev = [...usages].reverse().find((u) => u.i < humanIdx);
-  const delta = cur - (prev ? prev.sum : 0);
-  return delta > 0 ? delta : cur;
+  for (let i = humanIdx + 1; i < entries.length; i++) {
+    const e = entries[i];
+    if (isAssistant(e) && e.message.usage) {
+      const u = e.message.usage;
+      return (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+    }
+  }
+  return null;
 }
 
 // Conservative: only flag an obvious compaction/summary entry.
@@ -147,6 +143,6 @@ module.exports = {
   toolResults,
   finalAssistantText,
   humanCount,
-  turnInputDelta,
+  turnNewInput,
   hasCompaction,
 };

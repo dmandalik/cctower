@@ -79,8 +79,15 @@ test('self-tuning appends a calibration pair on a clean turn', () => {
   runLand(dir, { sessionId: 'sess-cal', transcript: 'transcript-calibration.jsonl' });
   const cal = JSON.parse(fs.readFileSync(path.join(dir, 'calibration.json'), 'utf8'));
   assert.strictEqual(cal.pairs.length, 1);
-  assert.deepStrictEqual(cal.pairs[0], { estimate: 1500, actual: 1700 });
-  assert.ok(cal.correction > 1.1 && cal.correction < 1.2, `correction ${cal.correction}`);
+  assert.deepStrictEqual(cal.pairs[0], { estimate: 1500, actual: 1300 });
+  assert.ok(cal.correction > 0.85 && cal.correction < 0.88, `correction ${cal.correction}`);
+});
+
+test('self-tuning drops an implausible estimate/actual pair', () => {
+  // estimate 10 vs actual 1300 -> ratio 130, outside the sanity band.
+  const dir = home({ id: 'sess-bad', data: { lastPrompt: { estimate: { low: 10 } } } });
+  runLand(dir, { sessionId: 'sess-bad', transcript: 'transcript-calibration.jsonl' });
+  assert.ok(!fs.existsSync(path.join(dir, 'calibration.json')), 'no calibration for a garbage ratio');
 });
 
 test('60s cooldown: a second Stop for the session writes no new card', () => {

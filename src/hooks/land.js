@@ -95,8 +95,12 @@ function run() {
   try {
     const clean = T.humanCount(turn) === 1 && !T.hasCompaction(entries);
     if (estimate > 0 && clean) {
-      actual = T.turnInputDelta(entries);
-      if (actual > 0) {
+      actual = T.turnNewInput(entries);
+      // Sanity guard: only calibrate on plausible pairs. A wildly off ratio
+      // means the measurement caught context/tool churn, not the prompt — drop
+      // it rather than let one bad turn poison the correction factor.
+      const ratio = actual > 0 ? actual / estimate : 0;
+      if (ratio >= 0.2 && ratio <= 5) {
         const next = appendPair(readJson(sp.calibration, {}) || {}, estimate, actual);
         writeJson(sp.calibration, next);
         correction = next.correction;
