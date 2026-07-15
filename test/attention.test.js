@@ -24,7 +24,7 @@ function ctx(config) {
 
 function run(inputObj, { home, log }) {
   const res = spawnSync('node', [ATTN], {
-    input: JSON.stringify(inputObj),
+    input: JSON.stringify({ ...inputObj, cwd: '/Users/me/projects/algo-pipeline' }),
     env: { ...process.env, CCTOWER_HOME: home, CCTOWER_NOTIFY_LOG: log },
     encoding: 'utf8',
   });
@@ -45,6 +45,7 @@ test('permission Notification toasts as urgent and records waitingSince', () => 
   assert.strictEqual(notes.length, 1);
   assert.strictEqual(notes[0].urgent, true);
   assert.match(notes[0].title, /permission/i);
+  assert.match(notes[0].title, /algo-pipeline/); // toast names the project
   assert.ok(typeof session(c.home, 'sess-attn-0001').waitingSince === 'number');
 });
 

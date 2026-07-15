@@ -143,3 +143,6 @@ vite.config.ts.timestamp-*
 .vite/
 CLAUDE.md
 SPEC.md
+
+# macOS
+.DS_Store

@@ -21,6 +21,14 @@ function sessionFile(id) {
   return path.join(statePaths().sessions, `${id || 'unknown'}.json`);
 }
 
+// Human label for the session so a toast tells you WHICH chat pinged — the
+// project folder name, falling back to a short session id.
+function projectLabel(input) {
+  if (input.cwd) return path.basename(String(input.cwd));
+  if (input.session_id) return String(input.session_id).slice(0, 8);
+  return 'session';
+}
+
 // Permission requests are urgent; everything else is "waiting for input".
 function classify(input) {
   const hay = [input.type, input.notification_type, input.message, input.title]
@@ -48,7 +56,8 @@ function handleNotification(input, cfg) {
 
   let status = 'off';
   if (cfg.notifications.needsInput && !inCooldown(sess, now)) {
-    const title = urgent ? 'Claude needs permission' : 'Claude is waiting';
+    const proj = projectLabel(input);
+    const title = urgent ? `Claude needs permission · ${proj}` : `Claude is waiting · ${proj}`;
     const message =
       (input.message && String(input.message).slice(0, 180)) ||
       (urgent ? 'A tool call needs your approval.' : 'Waiting for your input.');
@@ -80,8 +89,9 @@ function handleStop(input, cfg) {
 
   let status = 'off';
   if (cfg.notifications.done && !inCooldown(sess, now)) {
+    const proj = projectLabel(input);
     const verdict = sess.verdict || null; // land.js fills this in (Phase 3)
-    const title = verdict ? `Claude done · ${verdict}` : 'Claude done';
+    const title = verdict ? `Claude done · ${proj} · ${verdict}` : `Claude done · ${proj}`;
     const message = verdict ? `Turn finished (${verdict}).` : 'Turn finished.';
     status = notify({ title, message, sound: cfg.notifications.sound });
     sess.lastNotifiedAt = now;

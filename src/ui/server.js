@@ -12,14 +12,43 @@ const { collectState } = require('./state');
 
 const INDEX = path.join(__dirname, 'index.html');
 
-function openBrowser(url) {
-  const cmd =
-    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-  try {
-    execFile(cmd, [url], () => {});
-  } catch {
-    /* opening is a convenience, not required */
+// Open the panel as a chromeless "app window" if a Chromium browser is around
+// (feels like a native pop-up, no tabs/address bar), else fall back to a normal
+// browser tab. Each candidate is tried in order until one launches. Best-effort
+// — the URL is always printed so the user can open it themselves.
+function openAppWindow(url) {
+  const app = `--app=${url}`;
+  const size = '--window-size=760,920';
+  let candidates;
+  if (process.platform === 'darwin') {
+    const chromium = (name) => ['open', ['-na', name, '--args', app, size]];
+    candidates = [chromium('Google Chrome'), chromium('Microsoft Edge'), chromium('Brave Browser'), ['open', [url]]];
+  } else if (process.platform === 'win32') {
+    candidates = [
+      ['cmd', ['/c', 'start', '', 'chrome', app, size]],
+      ['cmd', ['/c', 'start', '', 'msedge', app, size]],
+      ['cmd', ['/c', 'start', '', url]],
+    ];
+  } else {
+    candidates = [
+      ['google-chrome', [app, size]],
+      ['chromium', [app, size]],
+      ['microsoft-edge', [app, size]],
+      ['xdg-open', [url]],
+    ];
   }
+  const tryNext = (i) => {
+    if (i >= candidates.length) return;
+    const [cmd, args] = candidates[i];
+    try {
+      execFile(cmd, args, (err) => {
+        if (err) tryNext(i + 1);
+      });
+    } catch {
+      tryNext(i + 1);
+    }
+  };
+  tryNext(0);
 }
 
 function start({ open = true, port = 0, host = '127.0.0.1' } = {}) {
@@ -47,7 +76,7 @@ function start({ open = true, port = 0, host = '127.0.0.1' } = {}) {
   server.listen(port, host, () => {
     const url = `http://${host}:${server.address().port}`;
     console.log(`cctower ui → ${url}  (Ctrl-C to quit)`);
-    if (open && !process.env.CCTOWER_NO_OPEN) openBrowser(url);
+    if (open && !process.env.CCTOWER_NO_OPEN) openAppWindow(url);
   });
 
   return server;
