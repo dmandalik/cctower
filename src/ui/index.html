@@ -50,6 +50,12 @@
   .model { font-size: 11.5px; color: var(--mut); margin-bottom: 8px; }
   .foot { display: flex; justify-content: space-between; margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 11px; color: var(--mut); font-variant-numeric: tabular-nums; }
 
+  /* attention alert bar */
+  .alert { background: var(--accent); color: #fff; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px;
+    font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; animation: alertpulse 1.5s infinite; }
+  .alert .who { font-weight: 400; opacity: .9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @keyframes alertpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(217,119,87,.55); } 55% { box-shadow: 0 0 0 7px rgba(217,119,87,0); } }
+
   /* live pre-flight banner */
   .pf { background: var(--accent-weak); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; margin-bottom: 4px; }
   .pf .pf-main { font-size: 12.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -74,11 +80,21 @@
 
   .srow { display: flex; align-items: center; gap: 9px; padding: 10px 15px; border-top: 1px solid var(--line); }
   .srow:first-child { border-top: 0; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-  .dot.running { background: var(--accent); animation: pulse 1.7s infinite; }
-  .dot.waiting { background: var(--amber); }
-  .dot.done { background: var(--green); }
-  @keyframes pulse { 0%{box-shadow:0 0 0 0 var(--accent-weak)} 70%{box-shadow:0 0 0 6px transparent} 100%{box-shadow:0 0 0 0 transparent} }
+  /* status colors: working=green · needs input=yellow · done=blue · issue=red */
+  .orb { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+  .orb.working { background: #3fb950; --gc: 63,185,80; animation: glow 1.5s infinite; }
+  .orb.waiting { background: #e3b341; --gc: 227,179,65; animation: glow 1s infinite; }
+  .orb.issue { background: #f05045; --gc: 240,80,69; animation: glow .9s infinite; }
+  .orb.done { background: #4a9eff; box-shadow: 0 0 6px 1px rgba(74,158,255,.55); }
+  @keyframes glow {
+    0%   { box-shadow: 0 0 4px 1px rgba(var(--gc),.7), 0 0 0 0 rgba(var(--gc),.5); }
+    70%  { box-shadow: 0 0 11px 3px rgba(var(--gc),.55), 0 0 0 7px rgba(var(--gc),0); }
+    100% { box-shadow: 0 0 4px 1px rgba(var(--gc),.7), 0 0 0 0 rgba(var(--gc),0); }
+  }
+  .slabel { font-size: 10.5px; font-weight: 600; white-space: nowrap; }
+  .slabel.working { color: #3fb950; }
+  .slabel.waiting { color: #c99a2e; }
+  .slabel.issue { color: #f05045; }
   .sid { flex: 1; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mini { width: 56px; flex: none; }
   .mini .bar { margin: 0; }
@@ -108,6 +124,8 @@
     <div class="brand"><span class="mark">✳</span> cctower <small id="mode" style="color:var(--mut);font-weight:400"></small></div>
     <div class="meta" id="meta">connecting…</div>
   </header>
+
+  <div id="alert"></div>
 
   <div id="preflight"></div>
 
@@ -147,6 +165,22 @@
     return `<div class="bar">${head}<div class="track"><div class="fill${warn}" style="width:${w}%"></div></div></div>`;
   }
 
+  // Loud, reliable attention signal that doesn't depend on macOS banners:
+  // a pulsing bar + a window-title count that shows even when the widget is
+  // behind other windows.
+  function renderAlert(list) {
+    const flagged = list.filter((s) => s.status === 'waiting' || s.status === 'issue');
+    if (!flagged.length) {
+      $('alert').innerHTML = '';
+      document.title = 'cctower';
+      return;
+    }
+    const n = flagged.length;
+    const who = flagged.map((s) => `${s.project || s.id}${s.status === 'issue' ? ' (issue)' : ''}`).join(', ');
+    $('alert').innerHTML = `<div class="alert">⚠ ${n} chat${n > 1 ? 's' : ''} need you <span class="who">· ${esc(who)}</span></div>`;
+    document.title = `(${n}) ⚠ cctower`;
+  }
+
   function renderPreflight(g, mode) {
     if (!g || !g.est) { $('preflight').innerHTML = ''; return; }
     const parts = [`<b>~${g.est.low}–${g.est.high}</b> tokens`];
@@ -158,15 +192,28 @@
     $('preflight').innerHTML = `<div class="pf"><div class="pf-main">last prompt · ${parts.join(' · ')}${silent}</div>${lint}</div>`;
   }
 
-  function renderQuota(s, est) {
-    const snap = s || {}, q = snap.quota || {}, rows = [];
-    if (typeof q.fiveHourPct === 'number')
-      rows.push(bar('5-hour' + (q.fiveHourResets ? ' · resets ' + q.fiveHourResets : ''), q.fiveHourPct, 85));
-    if (typeof q.weeklyPct === 'number') rows.push(bar('Weekly', q.weeklyPct, 85));
+  const fmtTokens = (n) => (n < 1000 ? String(n) : n < 1e6 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M');
+
+  function renderQuota(s, q, est) {
+    const snap = s || {};
     const model = (snap.modelName || snap.model) ? `<div class="model">${esc(snap.modelName || snap.model)}</div>` : '';
-    const body = rows.length ? model + rows.join('') : `<div class="empty">No quota data — Claude Code isn't reporting 5h/weekly limits to the statusline.</div>`;
+    let body;
+    if (q && q.source === 'official') {
+      const rows = [];
+      if (typeof q.fiveHourPct === 'number')
+        rows.push(bar('5-hour' + (q.fiveHourResets ? ' · resets ' + q.fiveHourResets : ''), q.fiveHourPct, 85));
+      if (typeof q.weeklyPct === 'number') rows.push(bar('Weekly', q.weeklyPct, 85));
+      body = model + rows.join('');
+    } else if (q && q.source === 'local estimate') {
+      body = model +
+        `<div class="bar"><div class="lbl"><span>5-hour usage</span><span class="val">${fmtTokens(q.fiveHourTokens)} tokens</span></div></div>` +
+        `<div class="bar"><div class="lbl"><span>7-day usage</span><span class="val">${fmtTokens(q.weeklyTokens)} tokens</span></div></div>`;
+    } else {
+      body = `<div class="empty">No quota data — no statusline rate limits and no local transcripts found.</div>`;
+    }
+    const srcTag = q ? `<span>${esc(q.source)}</span>` : '<span>quota</span>';
     const acc = est.accuracy == null ? 'no data' : '±' + est.accuracy + '%';
-    const foot = `<div class="foot"><span>estimator ×${est.correction.toFixed(2)}</span><span>${acc} · ${est.samples} samples</span></div>`;
+    const foot = `<div class="foot">${srcTag}<span>est ×${est.correction.toFixed(2)} · ${acc} · ${est.samples} samples</span></div>`;
     $('quotaZone').innerHTML = `<h2>Quota</h2><div class="panel pad">${body}${foot}</div>`;
   }
 
@@ -177,8 +224,9 @@
     const tog = (label, on, key) => `<div class="row"><span>${esc(label)}</span><span class="sw ${on ? 'on' : ''}" data-tog="${key}"></span></div>`;
     $('controls').innerHTML =
       `<div class="ctl-lbl">Mode</div><div class="seg">${seg}</div>` +
-      tog('Done alerts', n.done, 'done') +
+      tog('Working alerts', n.working, 'working') +
       tog('Needs-input alerts', n.needsInput, 'needsInput') +
+      tog('Done / issue alerts', n.done, 'done') +
       tog('Sound', n.sound, 'sound') +
       tog('Prompt lint', c.lint, 'lint') +
       `<div class="row slide"><span>Context warn</span><span class="sval" id="ctxv">${c.contextWarnPct}%</span></div>` +
@@ -215,18 +263,21 @@
     renderSessions(lastSessions);
   });
 
+  const STATE_LABEL = { working: 'working', waiting: 'needs input', issue: 'issue' };
+
   function renderSessions(list) {
     lastSessions = list;
     if (!list.length) { $('sessions').innerHTML = '<div class="pad empty">No sessions yet.</div>'; return; }
     const muted = new Set((cfg && cfg.mutedProjects) || []);
     $('sessions').innerHTML = list.map((s) => {
       const name = s.project || s.id;
-      const chip = s.verdict ? `<span class="chip ${chipCls(s.verdict)}">${esc(s.verdict)}</span>` : '';
-      const mini = s.contextPct != null ? `<div class="mini">${bar('', s.contextPct, 70)}</div>` : '';
+      const tag = s.status === 'done'
+        ? (s.verdict ? `<span class="chip ${chipCls(s.verdict)}">${esc(s.verdict)}</span>` : '')
+        : `<span class="slabel ${s.status}">${STATE_LABEL[s.status] || esc(s.status)}</span>`;
       const isMuted = s.project && muted.has(s.project);
       const bell = s.project ? `<span class="bell ${isMuted ? 'muted' : ''}" data-proj="${esc(s.project)}" title="${isMuted ? 'Unmute' : 'Mute'} ${esc(s.project)}">${isMuted ? '🔕' : '🔔'}</span>` : '';
-      return `<div class="srow"><span class="dot ${s.status}"></span>
-        <span class="sid" title="${esc(s.id)}">${esc(name)}</span>${mini}${chip}${bell}</div>`;
+      return `<div class="srow"><span class="orb ${s.status}"></span>
+        <span class="sid" title="${esc(s.id)}">${esc(name)}</span>${tag}${bell}</div>`;
     }).join('');
   }
 
@@ -259,8 +310,9 @@
       if (cfg && !controlsDone) { renderControls(cfg); controlsDone = true; }
       $('mode').textContent = st.mode ? '· ' + st.mode : '';
       $('meta').textContent = 'updated ' + new Date(st.ts).toLocaleTimeString();
+      renderAlert(st.sessions || []);
       renderPreflight(st.preflight, st.mode);
-      renderQuota(st.snapshot, st.estimator);
+      renderQuota(st.snapshot, st.quota, st.estimator);
       renderSessions(st.sessions || []);
       renderCards(st.cards || []);
     } catch {

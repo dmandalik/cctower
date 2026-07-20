@@ -24,12 +24,10 @@ function home({ mode, snapshot } = {}) {
   return dir;
 }
 
-function runGate(inputObj, cctowerHome) {
-  return spawnSync('node', [GATE], {
-    input: JSON.stringify(inputObj),
-    env: { ...process.env, CCTOWER_HOME: cctowerHome },
-    encoding: 'utf8',
-  });
+function runGate(inputObj, cctowerHome, notifyLog) {
+  const env = { ...process.env, CCTOWER_HOME: cctowerHome };
+  if (notifyLog) env.CCTOWER_NOTIFY_LOG = notifyLog;
+  return spawnSync('node', [GATE], { input: JSON.stringify(inputObj), env, encoding: 'utf8' });
 }
 
 test('advise mode with no snapshot prints a token line and exits 0', () => {
@@ -40,6 +38,42 @@ test('advise mode with no snapshot prints a token line and exits 0', () => {
   assert.match(res.stdout, /tokens/);
 });
 
+test('writes preflight.json so the widget can show the last pre-flight row', () => {
+  const dir = home({ mode: 'advise', snapshot: 'snapshot-high.json' });
+  runGate(readFix('prompt-heavy.json'), dir);
+  const pf = JSON.parse(fs.readFileSync(path.join(dir, 'preflight.json'), 'utf8'));
+  assert.ok(pf.est.high > 0);
+  assert.strictEqual(typeof pf.projected, 'number');
+  assert.match(pf.lint, /success criteria/);
+});
+
+test('preflight.json is written even in observe mode', () => {
+  const dir = home({ mode: 'observe' });
+  runGate(readFix('prompt-basic.json'), dir);
+  assert.ok(fs.existsSync(path.join(dir, 'preflight.json')));
+});
+
+test('records state=working and notifies on the transition into working', () => {
+  const dir = home();
+  const log = path.join(dir, 'n.ndjson');
+  // Seed a prior settled state so this prompt is a real done -> working change.
+  fs.writeFileSync(path.join(dir, 'sessions', 'sess-basic-0001.json'), JSON.stringify({ state: 'done', project: 'demo' }));
+  runGate(readFix('prompt-basic.json'), dir, log);
+
+  const sess = JSON.parse(fs.readFileSync(path.join(dir, 'sessions', 'sess-basic-0001.json'), 'utf8'));
+  assert.strictEqual(sess.state, 'working');
+  const notes = fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+  assert.strictEqual(notes.length, 1);
+  assert.match(notes[0].title, /working/i);
+});
+
+test('does NOT notify working on the first prompt of a new session', () => {
+  const dir = home();
+  const log = path.join(dir, 'n.ndjson');
+  runGate(readFix('prompt-basic.json'), dir, log); // no prior state
+  assert.ok(!fs.existsSync(log), 'no working toast without a prior state');
+});
+
 test('advise records the turn (git ref + estimate) in the session file', () => {
   const dir = home();
   runGate(readFix('prompt-basic.json'), dir);
@@ -47,6 +81,7 @@ test('advise records the turn (git ref + estimate) in the session file', () => {
   assert.ok(sess.lastPrompt);
   assert.ok(sess.lastPrompt.estimate.high > 0);
   assert.ok('gitRef' in sess.lastPrompt);
+  assert.match(sess.transcriptPath, /transcript/, 'transcript path stored for the stall watcher');
 });
 
 test('gate mode blocks (exit 2) when quota/context cross thresholds', () => {

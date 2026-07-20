@@ -25,6 +25,7 @@ function statePaths() {
     snapshot: path.join(h, 'snapshot.json'),
     sessions: path.join(h, 'sessions'),
     cards: path.join(h, 'cards'),
+    preflight: path.join(h, 'preflight.json'),
     calibration: path.join(h, 'calibration.json'),
     events: path.join(h, 'events.ndjson'),
     backups: path.join(h, 'backups'),

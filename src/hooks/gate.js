@@ -15,6 +15,7 @@ const { execFileSync } = require('child_process');
 const { readStdinJson } = require('../io');
 const { statePaths } = require('../paths');
 const { loadConfig, readJson, writeJson, appendEvent } = require('../state');
+const { notify } = require('../notify');
 const { estimate, humanTokens } = require('../estimator');
 const { lint, isHeavy } = require('../lint');
 
@@ -92,11 +93,22 @@ function run() {
   if (input.session_id) {
     const file = path.join(statePaths().sessions, `${input.session_id}.json`);
     const prev = readJson(file, {}) || {};
+    const proj = input.cwd ? path.basename(String(input.cwd)) : prev.project;
     writeJson(file, {
       ...prev,
-      project: input.cwd ? path.basename(String(input.cwd)) : prev.project,
+      project: proj,
+      state: 'working', // prompt submitted -> Claude is working
+      stall: false,
+      transcriptPath: input.transcript_path || prev.transcriptPath,
       lastPrompt: { ts: new Date().toISOString(), estimate: est, gitRef: gitRef(input.cwd) },
     });
+
+    // Notify on the transition INTO working (not on the first prompt of a
+    // brand-new session, and not on repeat working states).
+    const muted = Array.isArray(cfg.mutedProjects) && cfg.mutedProjects.includes(proj);
+    if (cfg.notifications.working && !muted && prev.state && prev.state !== 'working') {
+      notify({ title: `▶ Claude working · ${proj}`, message: 'Started a turn', sound: cfg.notifications.sound, group: input.session_id });
+    }
   }
 
   appendEvent({
@@ -109,6 +121,22 @@ function run() {
     projected,
     lint: lintNote || null,
   });
+
+  // In GUI clients the advise line below reaches the model's context, not the
+  // user's eyes — persist the readout so the widget can show a "last
+  // pre-flight" row. Written in every mode; it's telemetry, not advice.
+  try {
+    writeJson(statePaths().preflight, {
+      ts: new Date().toISOString(),
+      session: input.session_id || null,
+      est: { low: est.low, high: est.high, content: est.content },
+      heavy,
+      projected,
+      lint: lintNote || null,
+    });
+  } catch {
+    /* display is best-effort; never block the hook */
+  }
 
   if (cfg.mode === 'observe') return 0;
 
