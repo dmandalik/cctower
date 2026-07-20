@@ -25,6 +25,21 @@ test('turnNewInput = new (non-cached) input of the turn, excluding cache_read', 
   assert.strictEqual(T.humanCount(T.sliceTurn(entries)), 1);
 });
 
+test('needsInputEvidence: AskUserQuestion in the final assistant message', () => {
+  const turn = T.sliceTurn(T.readEntries(path.join(FIX, 'transcript-askuser.jsonl')));
+  assert.strictEqual(T.needsInputEvidence(turn), 'ask_user_question');
+});
+
+test('needsInputEvidence: trailing tool_use with no result (permission stall)', () => {
+  const turn = T.sliceTurn(T.readEntries(path.join(FIX, 'transcript-pending-tool.jsonl')));
+  assert.strictEqual(T.needsInputEvidence(turn), 'pending_tool_use');
+});
+
+test('needsInputEvidence: negative — resolved tools + final text message', () => {
+  const turn = T.sliceTurn(T.readEntries(path.join(FIX, 'transcript-verified.jsonl')));
+  assert.strictEqual(T.needsInputEvidence(turn), null);
+});
+
 test('readEntries tolerates a corrupt trailing line', () => {
   // no throw, and the good lines still parse
   const entries = T.readEntries(path.join(FIX, 'transcript-verified.jsonl'));

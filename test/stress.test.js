@@ -12,6 +12,8 @@ const path = require('path');
 const { notify } = require('../src/notify');
 
 const ATTN = path.join(__dirname, '..', 'src', 'hooks', 'attention.js');
+const LAND = path.join(__dirname, '..', 'src', 'hooks', 'land.js');
+const FIX = path.join(__dirname, 'fixtures');
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'cct-stress-'));
@@ -34,20 +36,21 @@ test('20 concurrent chats each notify once and log cleanly', async () => {
   const log = path.join(dir, 'n.ndjson');
   const N = 20;
 
+  // Notification (needs-input) events — attention toasts one per chat.
   await Promise.all(
     Array.from({ length: N }, (_, i) =>
       new Promise((resolve) => {
         const p = spawn('node', [ATTN], {
           env: { ...process.env, CCTOWER_HOME: dir, CCTOWER_NOTIFY_LOG: log },
         });
-        p.stdin.end(JSON.stringify({ session_id: `s${i}`, hook_event_name: 'Stop', cwd: `/proj/p${i}` }));
+        p.stdin.end(JSON.stringify({ session_id: `s${i}`, hook_event_name: 'Notification', type: 'idle_prompt', message: 'waiting', cwd: `/proj/p${i}` }));
         p.on('close', resolve);
       }),
     ),
   );
 
   const events = fs.readFileSync(path.join(dir, 'events.ndjson'), 'utf8').trim().split('\n').map(JSON.parse);
-  assert.strictEqual(events.filter((e) => e.event === 'stop').length, N, 'all stop events logged, no lost appends');
+  assert.strictEqual(events.filter((e) => e.event === 'notification').length, N, 'all events logged, no lost appends');
   assert.strictEqual(fs.readdirSync(path.join(dir, 'sessions')).filter((f) => f.endsWith('.json')).length, N);
   assert.strictEqual(fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).length, N, 'one toast per chat');
 });
@@ -56,13 +59,14 @@ test('mixed notification types across concurrent chats', async () => {
   const dir = tmp();
   fs.mkdirSync(path.join(dir, 'sessions'), { recursive: true });
   const log = path.join(dir, 'n.ndjson');
-  const inputs = [
-    { session_id: 'a', hook_event_name: 'Notification', type: 'permission_prompt', message: 'Allow Bash?', cwd: '/p/a' },
-    { session_id: 'b', hook_event_name: 'Notification', type: 'idle_prompt', message: 'waiting', cwd: '/p/b' },
-    { session_id: 'c', hook_event_name: 'Stop', cwd: '/p/c' },
+  // permission + idle via attention; done via land (which owns the done toast).
+  const jobs = [
+    [ATTN, { session_id: 'a', hook_event_name: 'Notification', type: 'permission_prompt', message: 'Allow Bash?', cwd: '/p/a' }],
+    [ATTN, { session_id: 'b', hook_event_name: 'Notification', type: 'idle_prompt', message: 'waiting', cwd: '/p/b' }],
+    [LAND, { session_id: 'c', hook_event_name: 'Stop', transcript_path: path.join(FIX, 'transcript-verified.jsonl'), cwd: '/p/c' }],
   ];
-  await Promise.all(inputs.map((input) => new Promise((resolve) => {
-    const p = spawn('node', [ATTN], { env: { ...process.env, CCTOWER_HOME: dir, CCTOWER_NOTIFY_LOG: log } });
+  await Promise.all(jobs.map(([script, input]) => new Promise((resolve) => {
+    const p = spawn('node', [script], { env: { ...process.env, CCTOWER_HOME: dir, CCTOWER_NOTIFY_LOG: log } });
     p.stdin.end(JSON.stringify(input));
     p.on('close', resolve);
   })));
@@ -77,6 +81,7 @@ test('mixed notification types across concurrent chats', async () => {
 test('dashboard collects 50 sessions', () => {
   const dir = tmp();
   process.env.CCTOWER_HOME = dir;
+  process.env.CCTOWER_CLAUDE_PROJECTS = tmp(); // never scan real ~/.claude
   fs.mkdirSync(path.join(dir, 'sessions'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'cards'), { recursive: true });
   for (let i = 0; i < 50; i++) {

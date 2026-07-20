@@ -16,21 +16,6 @@ function osaQuote(s) {
   return '"' + String(s).replace(/(["\\])/g, '\\$1') + '"';
 }
 
-// terminal-notifier is far more reliable than osascript (its own notification
-// permission, doesn't depend on Script Editor being enabled). Detect once.
-let _tn = null;
-function hasTerminalNotifier() {
-  if (_tn === null) {
-    try {
-      execFileSync('which', ['terminal-notifier'], { stdio: 'ignore' });
-      _tn = true;
-    } catch {
-      _tn = false;
-    }
-  }
-  return _tn;
-}
-
 // Guaranteed audible ping — plays even when notification *display* is blocked.
 // Non-blocking so the hook returns immediately.
 function playSound() {
@@ -41,19 +26,36 @@ function playSound() {
   }
 }
 
-function macNotify({ title, message, urgent, sound, group }) {
+// Best-effort delivery, tried in order; whether a banner actually shows is
+// decided by macOS notification settings (see README "Known platform limits").
+//   1. terminal-notifier, when the user has installed it (runtime-detected;
+//      NOT a package dependency). Per-session -group keeps concurrent chats
+//      from collapsing into one notification.
+//   2. osascript (posts as Script Editor) — always present on macOS.
+// Either path may be suppressed by the OS; the sound ping and the widget are
+// the reliable signals.
+let _tn = null;
+function hasTerminalNotifier() {
+  if (_tn === null) {
+    try {
+      execFileSync('which', ['terminal-notifier'], { stdio: 'ignore', timeout: 2000 });
+      _tn = true;
+    } catch {
+      _tn = false;
+    }
+  }
+  return _tn;
+}
+
+function macNotify({ title, message, sound, group }) {
   if (hasTerminalNotifier()) {
     const args = ['-title', String(title), '-message', String(message)];
-    // Per-session group: newer alerts for the SAME chat replace the old one,
-    // but different chats each keep their own notification (no collapsing).
     if (group) args.push('-group', `cctower-${String(group).replace(/[^\w.-]/g, '_')}`);
     execFileSync('terminal-notifier', args, { stdio: 'ignore', timeout: 3000 });
   } else {
     const script = `display notification ${osaQuote(message)} with title ${osaQuote(title)}`;
     execFileSync('osascript', ['-e', script], { stdio: 'ignore', timeout: 3000 });
   }
-  // Sound follows the toggle for every alert type (independent of whether the
-  // visual toast is allowed, so the user still gets a signal).
   if (sound) playSound();
 }
 
@@ -111,4 +113,4 @@ function notify(opts = {}) {
   }
 }
 
-module.exports = { notify };
+module.exports = { notify, hasTerminalNotifier };

@@ -110,6 +110,39 @@ function humanCount(turn) {
   return turn.filter(isHumanPrompt).length;
 }
 
+// tool_use blocks anywhere in the turn that never received a tool_result.
+// Mid-turn this is the currently executing (or permission-blocked) call.
+function pendingToolUses(turn) {
+  const results = toolResults(turn);
+  return toolUses(turn).filter((u) => u.id && !results[u.id]);
+}
+
+// Deterministic needs-input evidence from the turn's structure (no wording
+// guesses). Returns a signal name or null:
+//   'ask_user_question' — the final assistant message calls AskUserQuestion,
+//     Claude Code's explicit ask-the-user tool.
+//   'pending_tool_use'  — the turn ends on an assistant tool_use with no
+//     matching tool_result, i.e. stalled waiting for permission.
+function needsInputEvidence(turn) {
+  let lastAssistant = null;
+  for (let i = turn.length - 1; i >= 0; i--) {
+    if (isAssistant(turn[i])) {
+      lastAssistant = turn[i];
+      break;
+    }
+  }
+  if (!lastAssistant) return null;
+
+  const uses = blocks(lastAssistant).filter((b) => b && b.type === 'tool_use');
+  if (uses.some((b) => b.name === 'AskUserQuestion')) return 'ask_user_question';
+
+  if (uses.length) {
+    const results = toolResults(turn);
+    if (uses.some((b) => b.id && !results[b.id])) return 'pending_tool_use';
+  }
+  return null;
+}
+
 // New (non-cached) input tokens attributable to this turn's prompt: the first
 // assistant response after the human prompt, counting input_tokens +
 // cache_creation but NOT cache_read. Cached context re-reads (usually the bulk
@@ -143,6 +176,8 @@ module.exports = {
   toolResults,
   finalAssistantText,
   humanCount,
+  pendingToolUses,
+  needsInputEvidence,
   turnNewInput,
   hasCompaction,
 };

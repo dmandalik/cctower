@@ -12,7 +12,7 @@ const DEFAULT_CONFIG = {
   mode: 'advise', // observe | advise | gate
   contextWarnPct: 70,
   quotaWarnPct: 85,
-  notifications: { done: true, needsInput: true, sound: false },
+  notifications: { working: true, needsInput: true, done: true, sound: false },
   lint: true,
   mutedProjects: [], // project names whose notifications are silenced
 };
@@ -80,7 +80,7 @@ function updateConfig(patch) {
   if (typeof patch.lint === 'boolean') next.lint = patch.lint;
   if (patch.notifications && typeof patch.notifications === 'object') {
     next.notifications = { ...cur.notifications };
-    for (const k of ['done', 'needsInput', 'sound']) {
+    for (const k of ['working', 'needsInput', 'done', 'sound']) {
       if (typeof patch.notifications[k] === 'boolean') next.notifications[k] = patch.notifications[k];
     }
   }

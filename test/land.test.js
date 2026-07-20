@@ -22,19 +22,17 @@ function home(sessionSeed) {
   return dir;
 }
 
-function runLand(dir, { sessionId, transcript, stopActive = false }) {
+function runLand(dir, { sessionId, transcript, stopActive = false, log }) {
   const input = {
     session_id: sessionId,
     hook_event_name: 'Stop',
     stop_hook_active: stopActive,
     transcript_path: path.join(FIX, transcript),
-    cwd: os.tmpdir(), // not a repo -> no git diff, keeps the test hermetic
+    cwd: '/Users/x/projects/demo-proj', // not a repo -> no git diff; gives a project name
   };
-  const res = spawnSync('node', [LAND], {
-    input: JSON.stringify(input),
-    env: { ...process.env, CCTOWER_HOME: dir },
-    encoding: 'utf8',
-  });
+  const env = { ...process.env, CCTOWER_HOME: dir };
+  if (log) env.CCTOWER_NOTIFY_LOG = log;
+  const res = spawnSync('node', [LAND], { input: JSON.stringify(input), env, encoding: 'utf8' });
   return res;
 }
 
@@ -90,12 +88,72 @@ test('self-tuning drops an implausible estimate/actual pair', () => {
   assert.ok(!fs.existsSync(path.join(dir, 'calibration.json')), 'no calibration for a garbage ratio');
 });
 
-test('60s cooldown: a second Stop for the session writes no new card', () => {
+test('duplicate Stop for the same turn writes no second card', () => {
   const dir = home();
   runLand(dir, { sessionId: 'sess-cd', transcript: 'transcript-verified.jsonl' });
   const first = cards(dir).length;
   runLand(dir, { sessionId: 'sess-cd', transcript: 'transcript-verified.jsonl' });
-  assert.strictEqual(cards(dir).length, first, 'no second card within the cooldown');
+  assert.strictEqual(cards(dir).length, first, 'same turn mark -> deduped');
+});
+
+test('a NEW turn right after the last one still gets its card (no time cooldown)', () => {
+  const dir = home();
+  runLand(dir, { sessionId: 'sess-fast', transcript: 'transcript-verified.jsonl' });
+  runLand(dir, { sessionId: 'sess-fast', transcript: 'transcript-question.jsonl' });
+  assert.strictEqual(cards(dir).length, 2, 'consecutive turns both land');
+  const sess = JSON.parse(fs.readFileSync(path.join(dir, 'sessions', 'sess-fast.json'), 'utf8'));
+  assert.strictEqual(sess.state, 'waiting', 'the question turn updates state despite following fast');
+});
+
+test('land sends a "done" notification and records state=done', () => {
+  const dir = home();
+  const log = path.join(dir, 'n.ndjson');
+  runLand(dir, { sessionId: 'sess-d', transcript: 'transcript-verified.jsonl', log });
+  const notes = fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+  assert.strictEqual(notes.length, 1);
+  assert.match(notes[0].title, /done · demo-proj/);
+  const sess = JSON.parse(fs.readFileSync(path.join(dir, 'sessions', 'sess-d.json'), 'utf8'));
+  assert.strictEqual(sess.state, 'done');
+});
+
+test('AskUserQuestion evidence -> state=waiting + needs-input notification', () => {
+  const dir = home();
+  const log = path.join(dir, 'n.ndjson');
+  runLand(dir, { sessionId: 'sess-ask', transcript: 'transcript-askuser.jsonl', log });
+  const notes = fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+  assert.match(notes[0].title, /needs your input/);
+  const sess = JSON.parse(fs.readFileSync(path.join(dir, 'sessions', 'sess-ask.json'), 'utf8'));
+  assert.strictEqual(sess.state, 'waiting');
+});
+
+test('pending tool_use at Stop is NOT needs-input (interrupt/race), not waiting', () => {
+  const dir = home();
+  runLand(dir, { sessionId: 'sess-stall', transcript: 'transcript-pending-tool.jsonl' });
+  const sess = JSON.parse(fs.readFileSync(path.join(dir, 'sessions', 'sess-stall.json'), 'utf8'));
+  assert.strictEqual(sess.state, 'done');
+});
+
+test('final message asking a question -> state=waiting + needs-input notification', () => {
+  const dir = home();
+  const log = path.join(dir, 'n.ndjson');
+  runLand(dir, { sessionId: 'sess-q', transcript: 'transcript-question.jsonl', log });
+  const notes = fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+  assert.strictEqual(notes.length, 1);
+  assert.match(notes[0].title, /needs your input · demo-proj/);
+  const sess = JSON.parse(fs.readFileSync(path.join(dir, 'sessions', 'sess-q.json'), 'utf8'));
+  assert.strictEqual(sess.state, 'waiting');
+});
+
+test('land sends an "issue" notification (urgent) and records state=issue on FAILED', () => {
+  const dir = home();
+  const log = path.join(dir, 'n.ndjson');
+  runLand(dir, { sessionId: 'sess-i', transcript: 'transcript-failed.jsonl', log });
+  const notes = fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+  assert.strictEqual(notes.length, 1);
+  assert.match(notes[0].title, /issue · demo-proj/);
+  assert.strictEqual(notes[0].urgent, true);
+  const sess = JSON.parse(fs.readFileSync(path.join(dir, 'sessions', 'sess-i.json'), 'utf8'));
+  assert.strictEqual(sess.state, 'issue');
 });
 
 test('stop_hook_active guard: no card written', () => {

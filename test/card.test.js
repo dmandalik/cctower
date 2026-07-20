@@ -4,6 +4,24 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const card = require('../src/card');
 
+test('awaitsInput requires a trailing question — polite closings do not count', () => {
+  assert.ok(card.awaitsInput('Which database should I use — Postgres or SQLite?'));
+  assert.ok(card.awaitsInput('Want me to also add tests?'));
+  assert.ok(!card.awaitsInput('All tests pass. Fixed the null check.'));
+  assert.ok(!card.awaitsInput('Done — the build is green.'));
+  // These false-positives used to mark completed turns as "needs input".
+  assert.ok(!card.awaitsInput('I scaffolded it. Let me know how you want to proceed.'));
+  assert.ok(!card.awaitsInput('Done. Let me know if you want any adjustments.'));
+});
+
+test('looksLongRunning exempts tests, installs, watchers', () => {
+  assert.ok(card.looksLongRunning('npm test'));
+  assert.ok(card.looksLongRunning('pip install -r requirements.txt'));
+  assert.ok(card.looksLongRunning('npm run dev'));
+  assert.ok(!card.looksLongRunning('rm -rf build'));
+  assert.ok(!card.looksLongRunning('git status'));
+});
+
 test('classifyCmd recognizes test / lint / build runners', () => {
   assert.strictEqual(card.classifyCmd('npm test'), 'test');
   assert.strictEqual(card.classifyCmd('pytest -q'), 'test');

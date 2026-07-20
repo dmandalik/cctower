@@ -57,7 +57,7 @@ test('idle Notification toasts as non-urgent', () => {
   assert.match(notes[0].title, /waiting/i);
 });
 
-test('Stop toasts "done", clears waitingSince, and accumulates waited seconds', () => {
+test('Stop accounts waited time and clears waitingSince (no toast — land owns done)', () => {
   const c = ctx();
   // Pre-seed a wait that started 5s ago.
   fs.writeFileSync(
@@ -65,21 +65,10 @@ test('Stop toasts "done", clears waitingSince, and accumulates waited seconds', 
     JSON.stringify({ waitingSince: Date.now() - 5000 }),
   );
   const { notes } = run(readFix('stop.json'), c);
-  assert.strictEqual(notes.length, 1);
-  assert.match(notes[0].title, /done/i);
+  assert.strictEqual(notes.length, 0, 'attention Stop no longer toasts (land.js does)');
   const s = session(c.home, 'sess-attn-0001');
   assert.ok(!('waitingSince' in s), 'waitingSince cleared');
   assert.ok(s.waitedSeconds >= 4, `waitedSeconds ~5, got ${s.waitedSeconds}`);
-});
-
-test('done notification carries the verdict when land.js has set one', () => {
-  const c = ctx();
-  fs.writeFileSync(
-    path.join(c.home, 'sessions', 'sess-attn-0001.json'),
-    JSON.stringify({ verdict: 'VERIFIED' }),
-  );
-  const { notes } = run(readFix('stop.json'), c);
-  assert.match(notes[0].title, /VERIFIED/);
 });
 
 test('dedupe: a second notification within 30s is suppressed', () => {

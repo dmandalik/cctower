@@ -52,6 +52,7 @@ function handleNotification(input, cfg) {
   const urgent = kind === 'permission';
   const proj = projectLabel(input);
   sess.project = proj;
+  sess.state = 'waiting'; // Claude paused for the user (permission or idle)
   const muted = Array.isArray(cfg.mutedProjects) && cfg.mutedProjects.includes(proj);
 
   // First wait wins until Stop clears it.
@@ -77,39 +78,26 @@ function handleNotification(input, cfg) {
   });
 }
 
-function handleStop(input, cfg) {
+// On Stop, attention only accounts for idle-waiting time. The done/issue
+// notification and the final session state are owned by land.js (which knows
+// the verdict), so they aren't split across two parallel Stop hooks.
+function handleStop(input) {
   const now = Date.now();
   const file = sessionFile(input.session_id);
   const sess = readJson(file, {}) || {};
+  let total = sess.waitedSeconds || 0;
 
-  // Fold the time spent waiting into the running total for the report.
   if (typeof sess.waitingSince === 'number') {
-    sess.waitedSeconds =
-      (sess.waitedSeconds || 0) + Math.max(0, Math.round((now - sess.waitingSince) / 1000));
-    delete sess.waitingSince;
+    // Re-read right before writing to preserve land.js's concurrent write.
+    const fresh = readJson(file, {}) || {};
+    fresh.waitedSeconds =
+      (fresh.waitedSeconds || 0) + Math.max(0, Math.round((now - sess.waitingSince) / 1000));
+    delete fresh.waitingSince;
+    writeJson(file, fresh);
+    total = fresh.waitedSeconds;
   }
 
-  const proj = projectLabel(input);
-  sess.project = proj;
-  const muted = Array.isArray(cfg.mutedProjects) && cfg.mutedProjects.includes(proj);
-
-  let status = muted ? 'muted' : 'off';
-  if (cfg.notifications.done && !muted && !inCooldown(sess, now)) {
-    const verdict = sess.verdict || null; // land.js fills this in (Phase 3)
-    const title = verdict ? `Claude done · ${proj} · ${verdict}` : `Claude done · ${proj}`;
-    const message = verdict ? `Turn finished (${verdict}).` : 'Turn finished.';
-    status = notify({ title, message, sound: cfg.notifications.sound, group: input.session_id });
-    sess.lastNotifiedAt = now;
-  }
-
-  writeJson(file, sess);
-  appendEvent({
-    ts: new Date().toISOString(),
-    event: 'stop',
-    session: input.session_id || null,
-    waited: sess.waitedSeconds || 0,
-    notify: status,
-  });
+  appendEvent({ ts: new Date().toISOString(), event: 'stop', session: input.session_id || null, waited: total });
 }
 
 function run() {
@@ -118,7 +106,7 @@ function run() {
   // Prefer the declared event; fall back to a shape heuristic.
   const event = input.hook_event_name || (input.message ? 'Notification' : 'Stop');
   if (event === 'Notification') handleNotification(input, cfg);
-  else if (event === 'Stop') handleStop(input, cfg);
+  else if (event === 'Stop') handleStop(input);
   return 0;
 }
 

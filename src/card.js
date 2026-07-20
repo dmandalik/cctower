@@ -130,6 +130,24 @@ function decideVerdict({ files, diff, tests, claims }) {
   return 'UNVERIFIED';
 }
 
+// LAST-RESORT FALLBACK ONLY. The primary needs-input signal is deterministic
+// transcript evidence (AskUserQuestion, or a mid-turn stalled tool_use seen
+// by the widget's watcher). This check is intentionally strict — the final
+// text must END on a question mark. Phrase matching ("let me know…") was
+// removed: Claude's polite closings made completed turns read as questions.
+function awaitsInput(text) {
+  const t = String(text || '').trim();
+  return /\?\s*$/.test(t);
+}
+
+// Commands that legitimately run quiet for a long time — a pending tool_use
+// on one of these is normal execution, not a permission stall.
+const LONG_RUNNING_RE = /\b(install|ci|update|upgrade|download|clone|fetch|pull|push|curl|wget|sleep|watch|serve|start|dev|deploy|docker|compose|migrate|seed|train)\b/i;
+function looksLongRunning(cmd) {
+  const c = String(cmd || '');
+  return !!classifyCmd(c) || LONG_RUNNING_RE.test(c);
+}
+
 function analyze({ uses = [], results = {}, finalText = '', diff = null } = {}) {
   const files = filesTouched(uses);
   const tests = testRuns(uses, results);
@@ -207,6 +225,8 @@ function renderSummary(r) {
 
 module.exports = {
   analyze,
+  awaitsInput,
+  looksLongRunning,
   renderCard,
   renderSummary,
   filesTouched,
