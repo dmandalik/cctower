@@ -8,6 +8,8 @@ const path = require('path');
 const { statePaths } = require('./paths');
 const { readJson } = require('./state');
 const { accuracy } = require('./calibrate');
+const { getQuota } = require('./quota');
+const { humanTokens } = require('./estimator');
 
 const DAY_MS = 86_400_000;
 const VERDICTS = ['VERIFIED', 'UNVERIFIED', 'FAILED', 'NO-OP'];
@@ -73,7 +75,7 @@ function collect({ days = 7, now = Date.now() } = {}) {
 
   return {
     days,
-    quota: snapshot && snapshot.quota ? snapshot.quota : null,
+    quota: getQuota({ now }),
     estimator: {
       accuracy: accuracy(cal),
       correction: typeof cal.correction === 'number' ? cal.correction : 1,
@@ -109,11 +111,15 @@ function render(r) {
   const acc = r.estimator.accuracy == null ? 'no data' : `±${r.estimator.accuracy}% median error`;
   L.push(`  estimator        ${acc} · correction x${r.estimator.correction.toFixed(2)} (${r.estimator.samples} samples)`);
 
-  if (r.quota) {
+  if (r.quota && r.quota.source === 'official') {
     const parts = [];
     if (typeof r.quota.fiveHourPct === 'number') parts.push(`5h ${r.quota.fiveHourPct}%`);
     if (typeof r.quota.weeklyPct === 'number') parts.push(`wk ${r.quota.weeklyPct}%`);
-    if (parts.length) L.push(`  quota now        ${parts.join(' · ')}`);
+    if (parts.length) L.push(`  quota now        ${parts.join(' · ')}  (official)`);
+  } else if (r.quota && r.quota.source === 'local estimate') {
+    L.push(`  quota now        5h ${humanTokens(r.quota.fiveHourTokens)} · wk ${humanTokens(r.quota.weeklyTokens)} tokens  (local estimate)`);
+  } else {
+    L.push('  quota now        no data (no statusline rate limits, no local transcripts)');
   }
 
   if (r.lint.length) {

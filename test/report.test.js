@@ -66,8 +66,9 @@ test('report CLI renders a readable summary', () => {
 
 test('report on an empty state dir says so', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cct-report-empty-'));
+  const emptyProjects = fs.mkdtempSync(path.join(os.tmpdir(), 'cct-report-proj-'));
   const res = spawnSync('node', [BIN, 'report'], {
-    env: { ...process.env, CCTOWER_HOME: dir },
+    env: { ...process.env, CCTOWER_HOME: dir, CCTOWER_CLAUDE_PROJECTS: emptyProjects },
     encoding: 'utf8',
   });
   assert.strictEqual(res.status, 0);

@@ -61,6 +61,7 @@ test('humanTokens formats compactly', () => {
   assert.strictEqual(est.humanTokens(820), '820');
   assert.strictEqual(est.humanTokens(1000), '1k');
   assert.strictEqual(est.humanTokens(1240), '1.2k');
+  assert.strictEqual(est.humanTokens(15_200_000), '15.2M');
 });
 
 test('estimate() stays well under budget in-process', () => {

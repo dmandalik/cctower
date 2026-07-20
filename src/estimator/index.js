@@ -98,10 +98,12 @@ function estimate({ text = '', model = '', correction = 1 } = {}) {
   return { base, content, gen, multiplier, correction: corr, low, high };
 }
 
-// "1240" -> "1.2k", "820" -> "820". Used by the gate's advise line.
+// 820 -> "820", 1240 -> "1.2k", 15200000 -> "15.2M". Used by the gate's
+// advise line and the quota displays.
 function humanTokens(n) {
   if (n < 1000) return String(n);
-  return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  if (n < 1e6) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
 }
 
 module.exports = {
