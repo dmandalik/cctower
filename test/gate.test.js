@@ -25,10 +25,43 @@ function home({ mode, snapshot } = {}) {
 }
 
 function runGate(inputObj, cctowerHome, notifyLog) {
-  const env = { ...process.env, CCTOWER_HOME: cctowerHome };
+  const env = { ...process.env, CCTOWER_HOME: cctowerHome, CCTOWER_NO_WATCHER: '1' };
   if (notifyLog) env.CCTOWER_NOTIFY_LOG = notifyLog;
   return spawnSync('node', [GATE], { input: JSON.stringify(inputObj), env, encoding: 'utf8' });
 }
+
+test('gate spawns the watcher daemon and records its pidfile', async () => {
+  const dir = home();
+  // Short daemon timings so even a missed kill can't outlive the suite.
+  const env = { ...process.env, CCTOWER_HOME: dir, CCTOWER_WATCH_MS: '100', CCTOWER_WATCH_IDLE_MS: '500' };
+  delete env.CCTOWER_NO_WATCHER;
+  spawnSync('node', [GATE], { input: fs.readFileSync(path.join(FIX, 'prompt-basic.json'), 'utf8'), env, encoding: 'utf8' });
+  const pf = path.join(dir, 'watcher.pid');
+  // The daemon writes its pidfile asynchronously after the gate exits.
+  let pid = 0;
+  for (let i = 0; i < 40 && !pid; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+    try {
+      pid = Number(fs.readFileSync(pf, 'utf8').trim());
+    } catch {
+      /* not yet */
+    }
+  }
+  assert.ok(pid > 0, 'pidfile written by the daemon');
+  assert.doesNotThrow(() => process.kill(pid, 0), 'daemon is alive');
+  // Clean up and CONFIRM death — a leaked daemon must fail the test.
+  process.kill(pid, 'SIGKILL');
+  let dead = false;
+  for (let i = 0; i < 40 && !dead; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+    try {
+      process.kill(pid, 0);
+    } catch {
+      dead = true;
+    }
+  }
+  assert.ok(dead, 'daemon terminated');
+});
 
 test('advise mode with no snapshot prints a token line and exits 0', () => {
   const dir = home();
@@ -119,7 +152,7 @@ test('malformed stdin fails open (exit 0, no output)', () => {
   const dir = home();
   const res = spawnSync('node', [GATE], {
     input: 'not json at all',
-    env: { ...process.env, CCTOWER_HOME: dir },
+    env: { ...process.env, CCTOWER_HOME: dir, CCTOWER_NO_WATCHER: '1' },
     encoding: 'utf8',
   });
   assert.strictEqual(res.status, 0);

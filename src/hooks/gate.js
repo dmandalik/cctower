@@ -10,7 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFileSync, spawn } = require('child_process');
 
 const { readStdinJson } = require('../io');
 const { statePaths } = require('../paths');
@@ -21,6 +21,34 @@ const { lint, isHeavy } = require('../lint');
 
 // Prompts containing this token always pass the gate (override hint).
 const FORCE = '!force';
+
+// Keep the stall-watcher daemon alive: it is the only process that can catch
+// a mid-turn permission/question dialog (no hook fires then). Pidfile check
+// is a stat + signal-0 — microseconds; spawn is detached and unref'd so the
+// gate never waits on it.
+function ensureWatcher() {
+  if (process.env.CCTOWER_NO_WATCHER) return; // tests opt out of the daemon
+  try {
+    const pf = path.join(statePaths().home, 'watcher.pid');
+    try {
+      const pid = Number(fs.readFileSync(pf, 'utf8').trim());
+      if (pid > 0) {
+        process.kill(pid, 0); // throws if dead
+        return;
+      }
+    } catch {
+      /* stale or missing pidfile -> spawn */
+    }
+    const child = spawn(process.execPath, [path.join(__dirname, 'watcher.js')], {
+      detached: true,
+      stdio: 'ignore',
+      env: process.env,
+    });
+    child.unref();
+  } catch {
+    /* watcher is best-effort; the gate must never fail on it */
+  }
+}
 const NOISE_FLOOR = 250; // below this (and nothing flagged) advise stays silent.
 
 function gitRef(cwd) {
@@ -72,6 +100,7 @@ function projectContext(snapshot, estHigh) {
 }
 
 function run() {
+  ensureWatcher();
   const input = readStdinJson();
   const prompt = typeof input.prompt === 'string' ? input.prompt : '';
   const forced = prompt.includes(FORCE);

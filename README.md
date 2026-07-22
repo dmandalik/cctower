@@ -18,10 +18,12 @@ slows a session, and fails open on any internal error.
 - **Live widget** (`cctower ui`) — a compact local panel: per-session status
   orbs (working · needs input · issue · done), an alert bar + title flash when
   any chat needs you, the latest landing cards, the last pre-flight readout,
-  and controls (mode, alerts, thresholds, per-project mute). The widget
-  process is also the stall watcher: Claude Code fires no hook while a
-  permission or question dialog is open, so mid-turn needs-input detection
-  works while the widget is running.
+  and controls (mode, alerts, thresholds, per-project mute).
+- **Stall watcher** — Claude Code fires no hook while a permission or question
+  dialog is open, so the gate keeps a tiny detached watcher process alive
+  (auto-spawned per prompt, self-exits after 10 idle minutes). It tells a
+  blocked tool apart from a running one via the process table, so a slow
+  command never reads as "needs input".
 - **Pre-flight gate** — estimates each prompt's token cost, projects context
   use, lints weak prompts, and can block (`gate` mode, `!force` to override).
   Self-tunes against real usage.
