@@ -51,6 +51,20 @@ test('collectState reports snapshot, sessions, cards, estimator', () => {
   assert.strictEqual(st.cards[0].verdict, 'VERIFIED');
 });
 
+test('stale sessions (no activity inside the live window) are hidden', () => {
+  const f = path.join(dir, 'sessions', 'sess-old.json');
+  fs.writeFileSync(f, JSON.stringify({ project: 'ancient', state: 'done', verdict: 'VERIFIED' }));
+  const old = new Date(Date.now() - 5 * 3600_000); // beyond the 4h live window
+  fs.utimesSync(f, old, old);
+  try {
+    const st = collectState();
+    assert.ok(!st.sessions.some((s) => s.id === 'sess-old'), 'stale session not listed');
+    assert.ok(st.sessions.some((s) => s.id === 'sess-a'), 'fresh sessions still listed');
+  } finally {
+    fs.unlinkSync(f);
+  }
+});
+
 test('preflight falls back to the events log when preflight.json is absent', () => {
   const pf = path.join(dir, 'preflight.json');
   const saved = fs.readFileSync(pf, 'utf8');

@@ -107,6 +107,19 @@
   .chip.UNVERIFIED { background: var(--amber-bg); color: var(--amber); }
   .chip.FAILED { background: var(--red-bg); color: var(--red); }
 
+  /* collapsed landing-cards drawer */
+  details#cardsBox { margin-top: 20px; }
+  details#cardsBox summary {
+    cursor: pointer; list-style: none; font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--mut); font-weight: 600; padding: 2px;
+    user-select: none;
+  }
+  details#cardsBox summary::-webkit-details-marker { display: none; }
+  details#cardsBox summary::before { content: '▸ '; color: var(--accent); }
+  details#cardsBox[open] summary::before { content: '▾ '; }
+  details#cardsBox summary:hover { color: var(--ink); }
+  details#cardsBox .panel { margin-top: 8px; }
+
   .card { border-top: 1px solid var(--line); }
   .card:first-child { border-top: 0; }
   .card .head { display: flex; align-items: center; gap: 9px; padding: 11px 15px; cursor: pointer; }
@@ -132,13 +145,15 @@
   <h2>Live sessions</h2>
   <div class="panel" id="sessions"></div>
 
-  <h2>Landing cards</h2>
-  <div class="panel" id="cards"></div>
-
   <h2>Controls</h2>
   <div class="panel pad" id="controls"></div>
 
   <div id="quotaZone"></div>
+
+  <details id="cardsBox">
+    <summary>Landing cards <span id="cardCount"></span></summary>
+    <div class="panel" id="cards"></div>
+  </details>
 </div>
 
 <script>
@@ -177,7 +192,8 @@
     }
     const n = flagged.length;
     const who = flagged.map((s) => `${s.project || s.id}${s.status === 'issue' ? ' (issue)' : ''}`).join(', ');
-    $('alert').innerHTML = `<div class="alert">⚠ ${n} chat${n > 1 ? 's' : ''} need you <span class="who">· ${esc(who)}</span></div>`;
+    const label = n === 1 ? '1 chat needs you' : `${n} chats need you`;
+    $('alert').innerHTML = `<div class="alert">⚠ ${label} <span class="who">· ${esc(who)}</span></div>`;
     document.title = `(${n}) ⚠ cctower`;
   }
 
@@ -291,6 +307,7 @@
   });
 
   function renderCards(list) {
+    $('cardCount').textContent = list.length ? `(${list.length})` : '';
     if (!list.length) { $('cards').innerHTML = '<div class="pad empty">No landing cards yet.</div>'; return; }
     $('cards').innerHTML = list.map((c) => {
       const title = `${c.session || 'session'} · ${c.verdict || '—'}`;

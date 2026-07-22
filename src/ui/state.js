@@ -9,7 +9,7 @@ const { statePaths } = require('../paths');
 const { readJson, loadConfig } = require('../state');
 const { accuracy } = require('../calibrate');
 const { getQuota } = require('../quota');
-const { checkSession } = require('../stallwatch');
+const { checkSession, LIVE_MS } = require('../stallwatch');
 
 // working (Claude processing) · waiting (needs input) · issue (FAILED) · done.
 function sessionStatus(s) {
@@ -23,11 +23,33 @@ function sessionStatus(s) {
   return 'working';
 }
 
+// A session is LIVE only if its transcript (or, lacking one, its session
+// file) saw activity inside LIVE_MS. Everything older is a closed chat —
+// there is no "session ended" hook, so staleness is the only honest signal.
+function isLive(sessFilePath, sess, now) {
+  let liveAt = 0;
+  try {
+    liveAt = fs.statSync(sessFilePath).mtimeMs;
+  } catch {
+    return false;
+  }
+  if (sess.transcriptPath) {
+    try {
+      liveAt = Math.max(liveAt, fs.statSync(sess.transcriptPath).mtimeMs);
+    } catch {
+      /* transcript gone — fall back to session-file recency */
+    }
+  }
+  return now - liveAt < LIVE_MS;
+}
+
 function readSessions(p, snapshot) {
+  const now = Date.now();
   try {
     return fs
       .readdirSync(p.sessions)
       .filter((f) => f.endsWith('.json'))
+      .filter((f) => isLive(path.join(p.sessions, f), readJson(path.join(p.sessions, f), {}) || {}, now))
       .map((f) => {
         const id = f.replace(/\.json$/, '');
         // Same stall logic the watcher daemon runs — shared module, session-

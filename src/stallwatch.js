@@ -25,6 +25,11 @@ const { notify } = require('./notify');
 const { looksLongRunning } = require('./card');
 const T = require('./transcript');
 
+// A session only counts as LIVE while its transcript (or session file) saw
+// activity inside this window. Older sessions are closed chats: the app never
+// fires a "session ended" hook, so staleness is the only truthful signal.
+const LIVE_MS = 4 * 3600_000;
+
 const STALL_MS = 15_000; // quiet time before a pending tool counts as stalled
 const ASK_MS = 3_000; // AskUserQuestion needs only a settle delay
 const RESUME_MS = 3_000; // fresh writes mean the turn is moving again
@@ -172,12 +177,20 @@ function checkAll(now = Date.now()) {
     const sess = readJson(path.join(p.sessions, f), {}) || {};
     if (sess.state !== 'working' && !(sess.state === 'waiting' && sess.stall === true)) continue;
     // A session with no live transcript can never stall — it must not keep
-    // the daemon alive (that made orphaned daemons immortal).
-    if (!sess.transcriptPath || !fs.existsSync(sess.transcriptPath)) continue;
+    // the daemon alive (that made orphaned daemons immortal). Same for stale
+    // transcripts: a chat quiet past the live window is a closed chat.
+    if (!sess.transcriptPath) continue;
+    let tMtime;
+    try {
+      tMtime = fs.statSync(sess.transcriptPath).mtimeMs;
+    } catch {
+      continue;
+    }
+    if (now - tMtime > LIVE_MS) continue;
     const after = checkSession(id, sess, now);
     if (after.state === 'working' || (after.state === 'waiting' && after.stall === true)) active++;
   }
   return active;
 }
 
-module.exports = { checkSession, checkAll, commandRunning, STALL_MS };
+module.exports = { checkSession, checkAll, commandRunning, STALL_MS, LIVE_MS };
