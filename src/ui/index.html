@@ -15,18 +15,7 @@
     --gray: #8a877e; --gray-bg: rgba(138, 135, 126, .14);
     --shadow: 0 1px 2px rgba(40, 38, 34, .04), 0 1px 3px rgba(40, 38, 34, .05);
   }
-  /* Forced dark (☾) is a deeper matte black — distinct from the warm
-     charcoal that auto (◐) shows when the system is dark. */
-  :root[data-theme="dark"] {
-    --bg: #121212; --panel: #1b1b1a; --line: #2a2a28;
-    --ink: #e4e2dd; --mut: #8d8b86;
-    --accent: #e08a6d; --accent-weak: rgba(224, 138, 109, .13);
-    --green: #74ab78; --green-bg: rgba(116, 171, 120, .14);
-    --amber: #cc984f; --amber-bg: rgba(204, 152, 79, .14);
-    --red: #d67d6c; --red-bg: rgba(214, 125, 108, .14);
-    --gray: #8d8b86; --gray-bg: rgba(141, 139, 134, .14);
-    --shadow: none;
-  }
+  /* Auto (◐) follows the system: cream in light, warm Claude charcoal in dark. */
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #262624; --panel: #30302e; --line: #3c3b38;
@@ -38,6 +27,19 @@
       --gray: #a3a099; --gray-bg: rgba(163, 160, 153, .15);
       --shadow: none;
     }
+  }
+  /* Forced dark (☾) is a deeper matte night-black — MUST come after the media
+     block: both selectors tie on specificity, so source order decides, and
+     this block losing was exactly the "dark looks like auto" bug. */
+  :root[data-theme="dark"] {
+    --bg: #121212; --panel: #1b1b1a; --line: #2a2a28;
+    --ink: #e4e2dd; --mut: #8d8b86;
+    --accent: #e08a6d; --accent-weak: rgba(224, 138, 109, .13);
+    --green: #74ab78; --green-bg: rgba(116, 171, 120, .14);
+    --amber: #cc984f; --amber-bg: rgba(204, 152, 79, .14);
+    --red: #d67d6c; --red-bg: rgba(214, 125, 108, .14);
+    --gray: #8d8b86; --gray-bg: rgba(141, 139, 134, .14);
+    --shadow: none;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
@@ -353,19 +355,25 @@
     const modes = ['observe', 'advise', 'gate'];
     const seg = modes.map((m) => `<button data-mode="${m}" class="${c.mode === m ? 'on' : ''}">${m}</button>`).join('');
     const n = c.notifications || {};
-    const tog = (label, on, key) => `<div class="row"><span>${esc(label)}</span><span class="sw ${on ? 'on' : ''}" data-tog="${key}"></span></div>`;
+    // Each row gets a tiny "?" with a one-line explanation (shared tip handler).
+    const tog = (label, on, key, tip) =>
+      `<div class="row"><span>${esc(label)}<span class="help" data-tip="tip-ctl-${key}">?</span></span><span class="sw ${on ? 'on' : ''}" data-tog="${key}"></span></div>` +
+      `<div class="tipbox" id="tip-ctl-${key}" hidden>${tip}</div>`;
+    const slide = (label, key, val, id, tip) =>
+      `<div class="row slide"><span>${esc(label)}<span class="help" data-tip="tip-ctl-${key}">?</span></span><span class="sval" id="${id}v">${val}%</span></div>` +
+      `<div class="tipbox" id="tip-ctl-${key}" hidden>${tip}</div>` +
+      `<input type="range" min="0" max="100" value="${val}" id="${id}r">`;
     $('controls').innerHTML =
       `<div class="ctl-lbl">Mode</div><div class="seg">${seg}</div>` +
       `<div class="mode-hint" id="modeHint"></div>` +
-      tog('Working alerts', n.working, 'working') +
-      tog('Needs-input alerts', n.needsInput, 'needsInput') +
-      tog('Done / issue alerts', n.done, 'done') +
-      tog('Sound', n.sound, 'sound') +
-      tog('Prompt lint', c.lint, 'lint') +
-      `<div class="row slide"><span>Context warn</span><span class="sval" id="ctxv">${c.contextWarnPct}%</span></div>` +
-      `<input type="range" min="0" max="100" value="${c.contextWarnPct}" id="ctxr">` +
-      `<div class="row slide"><span>Quota warn</span><span class="sval" id="qv">${c.quotaWarnPct}%</span></div>` +
-      `<input type="range" min="0" max="100" value="${c.quotaWarnPct}" id="qr">` +
+      tog('Advise hints', n.advise, 'advise', 'Toast a pre-flight hint when a prompt looks risky — weak wording or high projected context — and when the gate blocks. The per-prompt advice channel.') +
+      tog('Working alerts', n.working, 'working', 'Toast when a chat starts working again after being done or waiting.') +
+      tog('Needs-input alerts', n.needsInput, 'needsInput', 'Toast when a chat is blocked on you — a question or a permission dialog.') +
+      tog('Done / issue alerts', n.done, 'done', 'Toast when a turn finishes, with its verdict; urgent when a test or build failed.') +
+      tog('Sound', n.sound, 'sound', 'Play a ping with every alert — works even when macOS hides the visual banner.') +
+      tog('Prompt lint', c.lint, 'lint', 'Check each prompt for vague scope, missing success criteria, redundant pastes, or a premium model on a trivial ask.') +
+      slide('Context warn', 'ctxwarn', c.contextWarnPct, 'ctx', 'When the projected context after your prompt crosses this, advise mode hints and gate mode blocks. Context is measured live from the transcript.') +
+      slide('Quota warn', 'quotawarn', c.quotaWarnPct, 'q', 'When the official 5-hour quota crosses this, gate mode blocks. Needs statusline rate-limit data; inert when Claude Code does not expose it.') +
       `<div class="ctl-btns"><button class="ctl-btn" id="testNotif">Test notification</button><button class="ctl-btn" id="snoozeBtn"></button></div>`;
 
     const MODE_HINT = {

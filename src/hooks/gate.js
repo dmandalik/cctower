@@ -140,10 +140,11 @@ function run() {
   const lintNote = note && note.note;
 
   // Record this turn for the landing report (git ref + estimate).
+  let proj = input.cwd ? path.basename(String(input.cwd)) : undefined;
   if (input.session_id) {
     const file = path.join(statePaths().sessions, `${input.session_id}.json`);
     const prev = readJson(file, {}) || {};
-    const proj = input.cwd ? path.basename(String(input.cwd)) : prev.project;
+    proj = proj || prev.project;
     writeJson(file, {
       ...prev,
       project: proj,
@@ -171,6 +172,31 @@ function run() {
       blockReason = `projected context ${projected}% ≥ ${cfg.contextWarnPct}%`;
     } else if (typeof quotaPct === 'number' && quotaPct >= cfg.quotaWarnPct) {
       blockReason = `5h quota ${quotaPct}% ≥ ${cfg.quotaWarnPct}%`;
+    }
+  }
+
+  // GUI clients never show hook stdout to the user (it reaches the model's
+  // context only), so noteworthy pre-flight findings go out as notifications —
+  // the one surface that reliably reaches the user before a bad decision.
+  const ctxOver = projected != null && projected >= cfg.contextWarnPct;
+  const mutedHint = Array.isArray(cfg.mutedProjects) && cfg.mutedProjects.includes(proj);
+  if (cfg.notifications.advise !== false && !mutedHint) {
+    const who = proj || 'chat';
+    if (blockReason) {
+      notify({
+        title: `⛔ Prompt blocked · ${who}`,
+        message: `${blockReason} — resend with !force to override`,
+        urgent: true,
+        sound: cfg.notifications.sound,
+        group: input.session_id,
+      });
+    } else if (cfg.mode === 'advise' && (lintNote || ctxOver)) {
+      notify({
+        title: `💡 Pre-flight · ${who}`,
+        message: lintNote || `Projected context ${projected}% ≥ ${cfg.contextWarnPct}% — consider /compact or a fresh chat`,
+        sound: cfg.notifications.sound,
+        group: input.session_id,
+      });
     }
   }
 

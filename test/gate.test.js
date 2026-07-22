@@ -86,6 +86,45 @@ test('preflight.json is written even in observe mode', () => {
   assert.ok(fs.existsSync(path.join(dir, 'preflight.json')));
 });
 
+test('advise mode toasts a hint when the prompt is risky (lint finding)', () => {
+  const dir = home({ mode: 'advise' });
+  const log = path.join(dir, 'n.ndjson');
+  runGate(readFix('prompt-heavy.json'), dir, log); // heavy, no success criteria
+  const notes = fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+  assert.strictEqual(notes.length, 1);
+  assert.match(notes[0].title, /Pre-flight/);
+  assert.match(notes[0].message, /success criteria/);
+});
+
+test('advise mode stays quiet on a clean prompt', () => {
+  const dir = home({ mode: 'advise' });
+  const log = path.join(dir, 'n.ndjson');
+  runGate(readFix('prompt-basic.json'), dir, log); // well-formed prompt, low ctx
+  assert.ok(!fs.existsSync(log), 'no toast when nothing is noteworthy');
+});
+
+test('advise hints respect the notifications.advise toggle', () => {
+  const dir = home();
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'advise', notifications: { advise: false } }));
+  const log = path.join(dir, 'n.ndjson');
+  runGate(readFix('prompt-heavy.json'), dir, log);
+  assert.ok(!fs.existsSync(log), 'toggle off silences hints');
+});
+
+test('a gate block also fires an urgent toast', () => {
+  const dir = home();
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'gate', contextWarnPct: 5 }));
+  const log = path.join(dir, 'n.ndjson');
+  const input = readFix('prompt-basic.json');
+  input.transcript_path = path.join(FIX, 'transcript-calibration.jsonl');
+  const res = runGate(input, dir, log);
+  assert.strictEqual(res.status, 2);
+  const notes = fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+  assert.match(notes[0].title, /blocked/i);
+  assert.strictEqual(notes[0].urgent, true);
+  assert.match(notes[0].message, /!force/);
+});
+
 test('gate blocks from TRANSCRIPT-derived context when the statusline is dead', () => {
   const dir = home(); // no snapshot at all — desktop-app reality
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'gate', contextWarnPct: 5 }));

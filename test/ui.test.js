@@ -51,6 +51,23 @@ test('collectState reports snapshot, sessions, cards, estimator', () => {
   assert.strictEqual(st.cards[0].verdict, 'VERIFIED');
 });
 
+test('the live window is config-driven: 2h-old session hidden at 1h, shown at 4h', () => {
+  const { updateConfig } = require('../src/state');
+  const f = path.join(dir, 'sessions', 'sess-2h.json');
+  fs.writeFileSync(f, JSON.stringify({ project: 'twohours', state: 'done', verdict: 'VERIFIED' }));
+  const twoHoursAgo = new Date(Date.now() - 2 * 3600_000);
+  fs.utimesSync(f, twoHoursAgo, twoHoursAgo);
+  try {
+    updateConfig({ liveWindowHours: 1 });
+    assert.ok(!collectState().sessions.some((s) => s.id === 'sess-2h'), 'hidden at 1h window');
+    updateConfig({ liveWindowHours: 4 });
+    assert.ok(collectState().sessions.some((s) => s.id === 'sess-2h'), 'shown at 4h window');
+  } finally {
+    updateConfig({ liveWindowHours: 4 });
+    fs.unlinkSync(f);
+  }
+});
+
 test('stale sessions (no activity inside the live window) are hidden', () => {
   const f = path.join(dir, 'sessions', 'sess-old.json');
   fs.writeFileSync(f, JSON.stringify({ project: 'ancient', state: 'done', verdict: 'VERIFIED' }));

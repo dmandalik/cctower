@@ -57,8 +57,9 @@ cctower uninstall    # remove only cctower's entries; prints the newest backup
 Set `mode` in `~/.cctower/config.json` or from the widget:
 
 - `observe` — log only.
-- `advise` (default) — print a compact pre-flight line; silent on trivial
-  prompts.
+- `advise` (default) — pre-flight hints on each prompt; silent on trivial
+  prompts. In GUI clients the hint arrives as a desktop notification (hook
+  stdout only reaches the model), plus the widget's pre-flight row.
 - `gate` — block a prompt when projected context/quota crosses a threshold;
   resend with `!force` in the prompt to override.
 
