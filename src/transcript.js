@@ -35,9 +35,27 @@ function blocks(e) {
   return Array.isArray(c) ? c : [];
 }
 
-// A genuine human prompt (not a tool_result carrier).
+function userText(e) {
+  const c = e && e.message && e.message.content;
+  if (typeof c === 'string') return c;
+  if (Array.isArray(c)) {
+    return c.filter((b) => b && b.type === 'text').map((b) => b.text || '').join('\n');
+  }
+  return '';
+}
+
+// Real transcripts write "[Request interrupted by user]"-style markers as
+// user text entries when the user hits Esc or rejects a tool. They are not
+// prompts, and they prove the user is at the keyboard.
+function isInterruptionMarker(e) {
+  return /^\s*\[Request interrupted/i.test(userText(e));
+}
+
+// A genuine human prompt (not a tool_result carrier, meta entry, or
+// interruption marker — all of which real transcripts also store as "user").
 function isHumanPrompt(e) {
-  if (!e || e.type !== 'user' || !e.message) return false;
+  if (!e || e.type !== 'user' || !e.message || e.isMeta) return false;
+  if (isInterruptionMarker(e)) return false;
   const c = e.message.content;
   if (typeof c === 'string') return c.trim().length > 0;
   if (Array.isArray(c)) {
@@ -110,11 +128,70 @@ function humanCount(turn) {
   return turn.filter(isHumanPrompt).length;
 }
 
-// tool_use blocks anywhere in the turn that never received a tool_result.
-// Mid-turn this is the currently executing (or permission-blocked) call.
+// tool_use blocks that never received a tool_result AND have no user entry
+// of any kind after them. A later user entry (tool_result for a sibling,
+// interruption marker, denial) means the app already moved past the
+// permission point — the call is dead, not blocked. Mid-turn, what remains
+// is the currently executing or permission-blocked call.
 function pendingToolUses(turn) {
   const results = toolResults(turn);
-  return toolUses(turn).filter((u) => u.id && !results[u.id]);
+  const out = [];
+  for (let i = 0; i < turn.length; i++) {
+    if (!isAssistant(turn[i])) continue;
+    const uses = blocks(turn[i]).filter((b) => b && b.type === 'tool_use');
+    if (!uses.length) continue;
+    const userAfter = turn.slice(i + 1).some((e) => e && e.type === 'user');
+    for (const u of uses) {
+      if (u.id && !results[u.id] && !userAfter) {
+        out.push({ id: u.id, name: u.name, input: u.input || {} });
+      }
+    }
+  }
+  return out;
+}
+
+// Did the user interrupt or reject a tool call this turn? (User is present.)
+function hasInterruption(turn) {
+  for (const e of turn) {
+    if (!e || e.type !== 'user') continue;
+    if (isInterruptionMarker(e)) return true;
+    const c = e.message && e.message.content;
+    if (Array.isArray(c)) {
+      for (const b of c) {
+        if (b && b.type === 'tool_result' && /doesn't want to proceed|user rejected/i.test(resultText(b.content))) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// Parse only the tail of a transcript (default 256KB) — enough for the
+// current turn's pending-tool check without paying for a huge file.
+function readTailEntries(file, bytes = 262144) {
+  try {
+    const size = fs.statSync(file).size;
+    const start = Math.max(0, size - bytes);
+    const fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(size - start);
+    fs.readSync(fd, buf, 0, buf.length, start);
+    fs.closeSync(fd);
+    let raw = buf.toString('utf8');
+    if (start > 0) raw = raw.slice(raw.indexOf('\n') + 1); // drop partial line
+    const out = [];
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        out.push(JSON.parse(line));
+      } catch {
+        /* partial/corrupt line */
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 // Deterministic needs-input evidence from the turn's structure (no wording
@@ -124,23 +201,10 @@ function pendingToolUses(turn) {
 //   'pending_tool_use'  — the turn ends on an assistant tool_use with no
 //     matching tool_result, i.e. stalled waiting for permission.
 function needsInputEvidence(turn) {
-  let lastAssistant = null;
-  for (let i = turn.length - 1; i >= 0; i--) {
-    if (isAssistant(turn[i])) {
-      lastAssistant = turn[i];
-      break;
-    }
-  }
-  if (!lastAssistant) return null;
-
-  const uses = blocks(lastAssistant).filter((b) => b && b.type === 'tool_use');
-  if (uses.some((b) => b.name === 'AskUserQuestion')) return 'ask_user_question';
-
-  if (uses.length) {
-    const results = toolResults(turn);
-    if (uses.some((b) => b.id && !results[b.id])) return 'pending_tool_use';
-  }
-  return null;
+  const pend = pendingToolUses(turn); // already excludes interrupted/dead calls
+  if (!pend.length) return null;
+  if (pend.some((u) => u.name === 'AskUserQuestion')) return 'ask_user_question';
+  return 'pending_tool_use';
 }
 
 // New (non-cached) input tokens attributable to this turn's prompt: the first
@@ -177,6 +241,8 @@ module.exports = {
   finalAssistantText,
   humanCount,
   pendingToolUses,
+  hasInterruption,
+  readTailEntries,
   needsInputEvidence,
   turnNewInput,
   hasCompaction,

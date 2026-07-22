@@ -40,6 +40,22 @@ test('needsInputEvidence: negative — resolved tools + final text message', () 
   assert.strictEqual(T.needsInputEvidence(turn), null);
 });
 
+test('interruption markers are not prompts, and kill pending status', () => {
+  const entries = T.readEntries(path.join(FIX, 'transcript-interrupted.jsonl'));
+  const turn = T.sliceTurn(entries);
+  // The turn anchors on the real prompt, not the "[Request interrupted…]" marker.
+  assert.strictEqual(T.humanCount(turn), 1);
+  assert.ok(T.hasInterruption(turn));
+  assert.deepStrictEqual(T.pendingToolUses(turn), [], 'interrupted tool is not pending');
+  assert.strictEqual(T.needsInputEvidence(turn), null);
+});
+
+test('readTailEntries parses the same turn as a full read', () => {
+  const file = path.join(FIX, 'transcript-verified.jsonl');
+  assert.strictEqual(T.readTailEntries(file).length, T.readEntries(file).length);
+  assert.strictEqual(T.readTailEntries(file, 200).length < T.readEntries(file).length, true, 'tiny tail truncates from the front');
+});
+
 test('readEntries tolerates a corrupt trailing line', () => {
   // no throw, and the good lines still parse
   const entries = T.readEntries(path.join(FIX, 'transcript-verified.jsonl'));

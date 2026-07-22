@@ -133,6 +133,23 @@ test('pending tool_use at Stop is NOT needs-input (interrupt/race), not waiting'
   assert.strictEqual(sess.state, 'done');
 });
 
+test('interrupted turn (Esc / rejection) -> done, never needs-input', () => {
+  const dir = home();
+  const log = path.join(dir, 'n.ndjson');
+  runLand(dir, { sessionId: 'sess-int', transcript: 'transcript-interrupted.jsonl', log });
+  const sess = JSON.parse(fs.readFileSync(path.join(dir, 'sessions', 'sess-int.json'), 'utf8'));
+  assert.strictEqual(sess.state, 'done');
+  const notes = fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+  assert.ok(!notes.some((n) => /input/.test(n.title)), 'no needs-input toast after an interrupt');
+});
+
+test('question above a trailing code block -> state=waiting', () => {
+  const dir = home();
+  runLand(dir, { sessionId: 'sess-qc', transcript: 'transcript-question-code.jsonl' });
+  const sess = JSON.parse(fs.readFileSync(path.join(dir, 'sessions', 'sess-qc.json'), 'utf8'));
+  assert.strictEqual(sess.state, 'waiting');
+});
+
 test('final message asking a question -> state=waiting + needs-input notification', () => {
   const dir = home();
   const log = path.join(dir, 'n.ndjson');

@@ -12,6 +12,10 @@ test('awaitsInput requires a trailing question — polite closings do not count'
   // These false-positives used to mark completed turns as "needs input".
   assert.ok(!card.awaitsInput('I scaffolded it. Let me know how you want to proceed.'));
   assert.ok(!card.awaitsInput('Done. Let me know if you want any adjustments.'));
+  // A question above a trailing command block must still be caught…
+  assert.ok(card.awaitsInput('Want me to push it?\n\n```sh\ngit push\n```'));
+  // …but a "?" inside the code block itself must not count.
+  assert.ok(!card.awaitsInput('All done.\n\n```sh\ngrep "why?" src/main.js\n```'));
 });
 
 test('looksLongRunning exempts tests, installs, watchers', () => {

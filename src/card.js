@@ -132,12 +132,22 @@ function decideVerdict({ files, diff, tests, claims }) {
 
 // LAST-RESORT FALLBACK ONLY. The primary needs-input signal is deterministic
 // transcript evidence (AskUserQuestion, or a mid-turn stalled tool_use seen
-// by the widget's watcher). This check is intentionally strict — the final
-// text must END on a question mark. Phrase matching ("let me know…") was
-// removed: Claude's polite closings made completed turns read as questions.
+// by the watcher). This check needs an actual question mark ending one of the
+// last few prose lines — phrase matching ("let me know…") was removed because
+// Claude's polite closings made completed turns read as questions. Fenced
+// code lines are skipped so a trailing command block doesn't hide the ask.
 function awaitsInput(text) {
-  const t = String(text || '').trim();
-  return /\?\s*$/.test(t);
+  const lines = String(text || '').split('\n');
+  const prose = [];
+  let inFence = false;
+  for (const line of lines) {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (!inFence && line.trim()) prose.push(line.trim());
+  }
+  return prose.slice(-5).some((l) => /\?$/.test(l));
 }
 
 // Commands that legitimately run quiet for a long time — a pending tool_use

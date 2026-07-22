@@ -132,7 +132,9 @@ function run() {
   //   otherwise      -> done (blue)
   let state = 'done';
   const evidence = T.needsInputEvidence(turn);
+  const interrupted = T.hasInterruption(turn);
   if (result.verdict === 'FAILED') state = 'issue';
+  else if (interrupted) state = 'done'; // user hit Esc / rejected — they're present
   else if (evidence === 'ask_user_question' || card.awaitsInput(finalText)) state = 'waiting';
 
   // Re-read to preserve fields the parallel Stop hook may have written.

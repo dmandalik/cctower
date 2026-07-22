@@ -1,0 +1,3 @@
+{"type":"user","timestamp":"2026-07-22T09:00:00Z","message":{"role":"user","content":"Clean the build directory."}}
+{"type":"assistant","timestamp":"2026-07-22T09:00:04Z","message":{"role":"assistant","model":"claude-opus-4-8","usage":{"input_tokens":800,"cache_creation_input_tokens":0,"cache_read_input_tokens":5500,"output_tokens":60},"content":[{"type":"text","text":"Removing it now."},{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"rm -rf build"}}]}}
+{"type":"user","timestamp":"2026-07-22T09:00:09Z","message":{"role":"user","content":"[Request interrupted by user for tool use]"}}
