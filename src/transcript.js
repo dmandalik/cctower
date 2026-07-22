@@ -225,6 +225,32 @@ function turnNewInput(entries) {
   return null;
 }
 
+// The chat's display title. The app writes {type:"ai-title", aiTitle} entries
+// into the transcript; the last one is the current name.
+function lastAiTitle(entries) {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const e = entries[i];
+    if (e && e.type === 'ai-title' && typeof e.aiTitle === 'string' && e.aiTitle.trim()) {
+      return e.aiTitle.trim();
+    }
+  }
+  return null;
+}
+
+// Tokens occupying the context window right now: the input side (prompt +
+// cache reads/writes) of the most recent assistant response. This is live
+// per-turn data straight from the transcript — no statusline required.
+function lastContextTokens(entries) {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const e = entries[i];
+    if (isAssistant(e) && e.message.usage) {
+      const u = e.message.usage;
+      return (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
+    }
+  }
+  return null;
+}
+
 // Conservative: only flag an obvious compaction/summary entry.
 function hasCompaction(entries) {
   return entries.some(
@@ -243,6 +269,8 @@ module.exports = {
   pendingToolUses,
   hasInterruption,
   readTailEntries,
+  lastContextTokens,
+  lastAiTitle,
   needsInputEvidence,
   turnNewInput,
   hasCompaction,

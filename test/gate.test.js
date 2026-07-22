@@ -86,6 +86,34 @@ test('preflight.json is written even in observe mode', () => {
   assert.ok(fs.existsSync(path.join(dir, 'preflight.json')));
 });
 
+test('gate blocks from TRANSCRIPT-derived context when the statusline is dead', () => {
+  const dir = home(); // no snapshot at all — desktop-app reality
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'gate', contextWarnPct: 5 }));
+  const input = readFix('prompt-basic.json');
+  // calibration fixture's last assistant usage = 10700 tokens ≈ 5% of 200k
+  input.transcript_path = path.join(FIX, 'transcript-calibration.jsonl');
+  const res = runGate(input, dir);
+  assert.strictEqual(res.status, 2, 'blocked on live transcript context');
+  assert.match(res.stderr, /projected context/);
+  const pf = JSON.parse(fs.readFileSync(path.join(dir, 'preflight.json'), 'utf8'));
+  assert.strictEqual(pf.ctxSource, 'transcript');
+  assert.match(pf.blocked, /projected context/);
+});
+
+test('gate stores the chat title from an ai-title entry in the transcript', () => {
+  const dir = home();
+  const t = path.join(dir, 'titled.jsonl');
+  fs.writeFileSync(t, [
+    fs.readFileSync(path.join(FIX, 'transcript-verified.jsonl'), 'utf8').trim(),
+    JSON.stringify({ type: 'ai-title', aiTitle: 'My Chat Name', sessionId: 'sess-basic-0001' }),
+  ].join('\n'));
+  const input = readFix('prompt-basic.json');
+  input.transcript_path = t;
+  runGate(input, dir);
+  const sess = JSON.parse(fs.readFileSync(path.join(dir, 'sessions', 'sess-basic-0001.json'), 'utf8'));
+  assert.strictEqual(sess.title, 'My Chat Name');
+});
+
 test('records state=working and notifies on the transition into working', () => {
   const dir = home();
   const log = path.join(dir, 'n.ndjson');

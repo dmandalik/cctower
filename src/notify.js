@@ -10,6 +10,18 @@
 
 const { execFileSync, spawn } = require('child_process');
 const fs = require('fs');
+const { statePaths } = require('./paths');
+
+// All notifications respect the user's snooze (config.snoozeUntil) unless the
+// caller passes force:true (the widget's "Test notification" button).
+function snoozed() {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(statePaths().config, 'utf8'));
+    return typeof cfg.snoozeUntil === 'number' && cfg.snoozeUntil > Date.now();
+  } catch {
+    return false;
+  }
+}
 
 // Quote a string for an AppleScript literal.
 function osaQuote(s) {
@@ -76,6 +88,8 @@ function windowsNotify() {
 }
 
 function notify(opts = {}) {
+  if (!opts.force && snoozed()) return 'snoozed';
+
   const payload = {
     title: opts.title || 'cctower',
     message: opts.message || '',

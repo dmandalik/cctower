@@ -15,6 +15,8 @@ const DEFAULT_CONFIG = {
   notifications: { working: true, needsInput: true, done: true, sound: false },
   lint: true,
   mutedProjects: [], // project names whose notifications are silenced
+  snoozeUntil: 0, // epoch ms; all notifications paused until then
+  liveWindowHours: 4, // sessions quiet longer than this drop off the widget
 };
 
 // Create the directories cctower writes into. Safe to call repeatedly.
@@ -86,6 +88,13 @@ function updateConfig(patch) {
   }
   if (Array.isArray(patch.mutedProjects)) {
     next.mutedProjects = [...new Set(patch.mutedProjects.filter((x) => typeof x === 'string'))].slice(0, 200);
+  }
+  if (Number.isFinite(patch.snoozeUntil)) {
+    // 0 clears; otherwise clamp to at most 24h ahead.
+    next.snoozeUntil = Math.max(0, Math.min(Math.round(patch.snoozeUntil), Date.now() + 24 * 3600_000));
+  }
+  if (Number.isFinite(patch.liveWindowHours)) {
+    next.liveWindowHours = Math.max(1, Math.min(24, Math.round(patch.liveWindowHours)));
   }
 
   writeJson(statePaths().config, next);

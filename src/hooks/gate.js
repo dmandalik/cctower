@@ -18,6 +18,7 @@ const { loadConfig, readJson, writeJson, appendEvent } = require('../state');
 const { notify } = require('../notify');
 const { estimate, humanTokens } = require('../estimator');
 const { lint, isHeavy } = require('../lint');
+const T = require('../transcript');
 
 // Prompts containing this token always pass the gate (override hint).
 const FORCE = '!force';
@@ -92,11 +93,28 @@ function adviseLine({ est, projected, snapshot, lintNote }) {
   return line;
 }
 
-function projectContext(snapshot, estHigh) {
-  if (!snapshot || typeof snapshot.contextPct !== 'number' || !snapshot.contextSize) {
-    return null;
+// Current context occupancy, best source first:
+//   1. a FRESH statusline snapshot (terminal CLI keeps this alive),
+//   2. the transcript itself — the last assistant response's input-side usage
+//      IS the live window occupancy (works in the desktop app, where the
+//      statusline never runs),
+//   3. a stale snapshot, marked as such.
+const SNAP_FRESH_MS = 10 * 60_000;
+function liveContext(tailEntries, snapshot) {
+  const size = (snapshot && snapshot.contextSize) || 200_000;
+  const fresh =
+    snapshot && snapshot.ts && Date.now() - Date.parse(snapshot.ts) < SNAP_FRESH_MS;
+  if (fresh && typeof snapshot.contextPct === 'number') {
+    return { pct: snapshot.contextPct, size, source: 'statusline' };
   }
-  return Math.round(snapshot.contextPct + (estHigh / snapshot.contextSize) * 100);
+  const tokens = T.lastContextTokens(tailEntries);
+  if (tokens != null) {
+    return { pct: Math.min(100, Math.round((tokens / size) * 100)), size, source: 'transcript' };
+  }
+  if (snapshot && typeof snapshot.contextPct === 'number') {
+    return { pct: snapshot.contextPct, size, source: 'stale statusline' };
+  }
+  return null;
 }
 
 function run() {
@@ -111,7 +129,10 @@ function run() {
 
   const est = estimate({ text: prompt, model, correction: correctionFactor() });
   const heavy = isHeavy(prompt, est.high);
-  const projected = projectContext(snapshot, est.high);
+  const tailEntries = T.readTailEntries(input.transcript_path || '');
+  const ctx = liveContext(tailEntries, snapshot);
+  const projected = ctx ? Math.min(100, Math.round(ctx.pct + (est.high / ctx.size) * 100)) : null;
+  const chatTitle = T.lastAiTitle(tailEntries);
 
   const note = cfg.lint
     ? lint({ prompt, estHigh: est.high, heavy, model, transcript: readTranscript(input.transcript_path) })
@@ -126,6 +147,7 @@ function run() {
     writeJson(file, {
       ...prev,
       project: proj,
+      title: chatTitle || prev.title, // the app's own chat name, when present
       state: 'working', // prompt submitted -> Claude is working
       stall: false,
       transcriptPath: input.transcript_path || prev.transcriptPath,
@@ -140,6 +162,18 @@ function run() {
     }
   }
 
+  // Decide the gate outcome up front so the event log and the widget's
+  // pre-flight row can both show WHY a prompt was blocked.
+  let blockReason = null;
+  if (cfg.mode === 'gate' && !forced) {
+    const quotaPct = snapshot && snapshot.quota && snapshot.quota.fiveHourPct;
+    if (projected != null && projected >= cfg.contextWarnPct) {
+      blockReason = `projected context ${projected}% ≥ ${cfg.contextWarnPct}%`;
+    } else if (typeof quotaPct === 'number' && quotaPct >= cfg.quotaWarnPct) {
+      blockReason = `5h quota ${quotaPct}% ≥ ${cfg.quotaWarnPct}%`;
+    }
+  }
+
   appendEvent({
     ts: new Date().toISOString(),
     event: 'gate',
@@ -148,6 +182,8 @@ function run() {
     est: { low: est.low, high: est.high, content: est.content },
     heavy,
     projected,
+    ctxSource: ctx ? ctx.source : null,
+    blocked: blockReason,
     lint: lintNote || null,
   });
 
@@ -161,6 +197,8 @@ function run() {
       est: { low: est.low, high: est.high, content: est.content },
       heavy,
       projected,
+      ctxSource: ctx ? ctx.source : null,
+      blocked: blockReason,
       lint: lintNote || null,
     });
   } catch {
@@ -169,20 +207,11 @@ function run() {
 
   if (cfg.mode === 'observe') return 0;
 
-  // gate mode: block when a threshold is crossed and the user hasn't forced.
-  if (cfg.mode === 'gate' && !forced) {
-    const overContext = projected != null && projected >= cfg.contextWarnPct;
-    const quotaPct = snapshot && snapshot.quota && snapshot.quota.fiveHourPct;
-    const overQuota = typeof quotaPct === 'number' && quotaPct >= cfg.quotaWarnPct;
-    if (overContext || overQuota) {
-      const why = overContext
-        ? `projected context ${projected}% ≥ ${cfg.contextWarnPct}%`
-        : `5h quota ${quotaPct}% ≥ ${cfg.quotaWarnPct}%`;
-      process.stderr.write(
-        `[cctower] blocked: ${why}. Resend with \`${FORCE}\` in the prompt to override.\n`,
-      );
-      return 2;
-    }
+  if (blockReason) {
+    process.stderr.write(
+      `[cctower] blocked: ${blockReason}. Resend with \`${FORCE}\` in the prompt to override.\n`,
+    );
+    return 2;
   }
 
   // advise (and gate when it doesn't block): print only when noteworthy.

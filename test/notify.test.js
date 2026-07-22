@@ -7,6 +7,10 @@ const os = require('os');
 const path = require('path');
 const { notify, hasTerminalNotifier } = require('../src/notify');
 
+// The snooze check reads config from CCTOWER_HOME — pin it to a throwaway dir
+// so tests never touch the real ~/.cctower.
+process.env.CCTOWER_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'cct-notify-home-'));
+
 test('CCTOWER_NOTIFY_LOG routes notifications to a file instead of the OS', () => {
   const log = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cct-nlog-')), 'n.ndjson');
   process.env.CCTOWER_NOTIFY_LOG = log;
@@ -36,6 +40,23 @@ test('notify carries the per-session group through to the payload', () => {
     const row = JSON.parse(fs.readFileSync(log, 'utf8').trim());
     assert.strictEqual(row.group, 'sess-123');
   } finally {
+    delete process.env.CCTOWER_NOTIFY_LOG;
+  }
+});
+
+test('snooze suppresses notifications; force bypasses it', () => {
+  const prevHome = process.env.CCTOWER_HOME;
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cct-snooze-'));
+  const log = path.join(home, 'n.ndjson');
+  process.env.CCTOWER_HOME = home;
+  process.env.CCTOWER_NOTIFY_LOG = log;
+  try {
+    fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ snoozeUntil: Date.now() + 3600_000 }));
+    assert.strictEqual(notify({ title: 'x' }), 'snoozed');
+    assert.ok(!fs.existsSync(log), 'suppressed notification is not delivered');
+    assert.strictEqual(notify({ title: 'x', force: true }), 'logged', 'force bypasses snooze');
+  } finally {
+    process.env.CCTOWER_HOME = prevHome;
     delete process.env.CCTOWER_NOTIFY_LOG;
   }
 });

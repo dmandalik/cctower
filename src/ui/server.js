@@ -84,6 +84,21 @@ function start({ open = true, port = 0, host = '127.0.0.1' } = {}) {
         res.end(JSON.stringify(collectState()));
         return;
       }
+      if (url === '/test-notification' && req.method === 'POST') {
+        // Fires through the exact same pipeline as real alerts (force bypasses
+        // snooze) so the user can verify their macOS notification settings.
+        const { notify } = require('../notify');
+        const status = notify({
+          title: 'cctower ✳ test',
+          message: 'Notifications are working.',
+          sound: true,
+          force: true,
+          group: 'cctower-test',
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status }));
+        return;
+      }
       if (url === '/config' && req.method === 'POST') {
         readBody(req).then((body) => {
           try {

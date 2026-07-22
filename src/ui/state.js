@@ -6,10 +6,10 @@
 const fs = require('fs');
 const path = require('path');
 const { statePaths } = require('../paths');
-const { readJson, loadConfig } = require('../state');
+const { readJson, writeJson, loadConfig } = require('../state');
 const { accuracy } = require('../calibrate');
 const { getQuota } = require('../quota');
-const { checkSession, LIVE_MS } = require('../stallwatch');
+const { checkSession } = require('../stallwatch');
 
 // working (Claude processing) · waiting (needs input) · issue (FAILED) · done.
 function sessionStatus(s) {
@@ -24,9 +24,10 @@ function sessionStatus(s) {
 }
 
 // A session is LIVE only if its transcript (or, lacking one, its session
-// file) saw activity inside LIVE_MS. Everything older is a closed chat —
-// there is no "session ended" hook, so staleness is the only honest signal.
-function isLive(sessFilePath, sess, now) {
+// file) saw activity inside the user's live window (Controls-adjustable).
+// Everything older is a closed chat — there is no "session ended" hook, so
+// staleness is the only honest signal.
+function isLive(sessFilePath, sess, now, windowMs) {
   let liveAt = 0;
   try {
     liveAt = fs.statSync(sessFilePath).mtimeMs;
@@ -40,21 +41,57 @@ function isLive(sessFilePath, sess, now) {
       /* transcript gone — fall back to session-file recency */
     }
   }
-  return now - liveAt < LIVE_MS;
+  return now - liveAt < windowMs;
+}
+
+// The app's chat title lives in ai-title entries that can sit anywhere in the
+// transcript (the gate's tail read catches recent ones). Fallback: one full
+// line-filtered scan, cached in the session file so it never repeats unless
+// the transcript grows substantially.
+function ensureTitle(p, id, sess) {
+  if (sess.title || !sess.transcriptPath) return sess;
+  let size;
+  try {
+    size = fs.statSync(sess.transcriptPath).size;
+  } catch {
+    return sess;
+  }
+  if (sess.titleScanSize && size < sess.titleScanSize * 2) return sess; // already scanned
+  let title = null;
+  try {
+    const raw = fs.readFileSync(sess.transcriptPath, 'utf8');
+    for (const line of raw.split('\n')) {
+      if (!line.includes('"ai-title"')) continue;
+      try {
+        const e = JSON.parse(line);
+        if (e.type === 'ai-title' && typeof e.aiTitle === 'string' && e.aiTitle.trim()) title = e.aiTitle.trim();
+      } catch {
+        /* skip */
+      }
+    }
+  } catch {
+    return sess;
+  }
+  const next = { ...sess, titleScanSize: size };
+  if (title) next.title = title;
+  writeJson(path.join(p.sessions, `${id}.json`), next);
+  return next;
 }
 
 function readSessions(p, snapshot) {
   const now = Date.now();
+  const windowMs = Math.max(1, Math.min(24, loadConfig().liveWindowHours || 4)) * 3600_000;
   try {
     return fs
       .readdirSync(p.sessions)
       .filter((f) => f.endsWith('.json'))
-      .filter((f) => isLive(path.join(p.sessions, f), readJson(path.join(p.sessions, f), {}) || {}, now))
+      .filter((f) => isLive(path.join(p.sessions, f), readJson(path.join(p.sessions, f), {}) || {}, now, windowMs))
       .map((f) => {
         const id = f.replace(/\.json$/, '');
         // Same stall logic the watcher daemon runs — shared module, session-
         // file dedupe, so double-polling never double-notifies.
-        const s = checkSession(id, readJson(path.join(p.sessions, f), {}) || {});
+        let s = checkSession(id, readJson(path.join(p.sessions, f), {}) || {});
+        s = ensureTitle(p, id, s);
         const updated = fs.statSync(path.join(p.sessions, f)).mtimeMs;
         // Per-session context is only known for the session the statusline
         // last reported on; others show an empty mini-bar.
@@ -62,6 +99,7 @@ function readSessions(p, snapshot) {
         return {
           id,
           project: s.project || null,
+          title: s.title || null,
           status: sessionStatus(s),
           verdict: s.verdict || null,
           contextPct,

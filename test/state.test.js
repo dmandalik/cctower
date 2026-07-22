@@ -78,6 +78,17 @@ test('updateConfig rejects a bad mode and clamps out-of-range percentages', () =
   assert.strictEqual(next.contextWarnPct, 100); // clamped
 });
 
+test('updateConfig handles snooze and the live window', () => {
+  freshHome();
+  const soon = Date.now() + 3600_000;
+  let next = state.updateConfig({ snoozeUntil: soon, liveWindowHours: 12 });
+  assert.strictEqual(next.snoozeUntil, soon);
+  assert.strictEqual(next.liveWindowHours, 12);
+  next = state.updateConfig({ snoozeUntil: -5, liveWindowHours: 99 });
+  assert.strictEqual(next.snoozeUntil, 0); // clamped to cleared
+  assert.strictEqual(next.liveWindowHours, 24); // clamped to a day
+});
+
 test('loadConfig merges partial config over defaults', () => {
   freshHome();
   const p = statePaths();

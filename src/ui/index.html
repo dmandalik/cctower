@@ -15,16 +15,16 @@
     --gray: #8a877e; --gray-bg: rgba(138, 135, 126, .14);
     --shadow: 0 1px 2px rgba(40, 38, 34, .04), 0 1px 3px rgba(40, 38, 34, .05);
   }
-  /* Dark palette applies when the system prefers dark (unless the user
-     forced light) or when the user forced dark via the header toggle. */
+  /* Forced dark (☾) is a deeper matte black — distinct from the warm
+     charcoal that auto (◐) shows when the system is dark. */
   :root[data-theme="dark"] {
-    --bg: #262624; --panel: #30302e; --line: #3c3b38;
-    --ink: #ecebe4; --mut: #a3a099;
-    --accent: #e08a6d; --accent-weak: rgba(224, 138, 109, .16);
-    --green: #7bb47f; --green-bg: rgba(123, 180, 127, .15);
-    --amber: #d6a054; --amber-bg: rgba(214, 160, 84, .15);
-    --red: #e08573; --red-bg: rgba(224, 133, 115, .15);
-    --gray: #a3a099; --gray-bg: rgba(163, 160, 153, .15);
+    --bg: #121212; --panel: #1b1b1a; --line: #2a2a28;
+    --ink: #e4e2dd; --mut: #8d8b86;
+    --accent: #e08a6d; --accent-weak: rgba(224, 138, 109, .13);
+    --green: #74ab78; --green-bg: rgba(116, 171, 120, .14);
+    --amber: #cc984f; --amber-bg: rgba(204, 152, 79, .14);
+    --red: #d67d6c; --red-bg: rgba(214, 125, 108, .14);
+    --gray: #8d8b86; --gray-bg: rgba(141, 139, 134, .14);
     --shadow: none;
   }
   @media (prefers-color-scheme: dark) {
@@ -65,7 +65,11 @@
     padding: 8px 11px; margin: 0 2px 8px;
   }
   .tipbox b { color: var(--ink); font-weight: 600; }
-  h2 { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--mut); font-weight: 600; margin: 18px 2px 8px; }
+  h2 { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--mut); font-weight: 600; margin: 18px 2px 8px; display: flex; align-items: center; }
+  .hspacer { flex: 1; }
+  .winopt { font-size: 9.5px; letter-spacing: .02em; padding: 2px 7px; border-radius: 12px; cursor: pointer; color: var(--mut); background: var(--gray-bg); margin-left: 4px; }
+  .winopt.on { background: var(--accent-weak); color: var(--accent); }
+  .winopt:hover { color: var(--accent); }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
   .pad { padding: 13px 15px; }
   .empty { color: var(--mut); font-size: 12.5px; }
@@ -91,7 +95,16 @@
   .pf .pf-main { font-size: 12.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
   .pf .pf-main b { color: var(--accent); font-weight: 600; }
   .pf .pf-lint { font-size: 11.5px; color: var(--amber); margin-top: 4px; }
+  .pf .pf-block { font-size: 11.5px; color: var(--red); font-weight: 600; margin-top: 4px; }
   .pf .pf-idle { font-size: 12px; color: var(--mut); }
+
+  .mode-hint { font-size: 11px; color: var(--mut); margin: 7px 2px 3px; line-height: 1.5; }
+  .ctl-btns { display: flex; gap: 8px; margin-top: 13px; }
+  .ctl-btn { flex: 1; background: var(--accent-weak); border: 0; border-radius: 8px; color: var(--accent);
+    font: inherit; font-size: 11.5px; font-weight: 600; padding: 8px 0; cursor: pointer; }
+  .ctl-btn:hover { background: var(--accent); color: #fff; }
+  .saved { font-size: 10px; color: var(--green); letter-spacing: .02em; text-transform: none; margin-left: 6px; font-weight: 600; }
+  details#cardsBox + .tipbox { margin-top: 8px; }
 
   /* controls */
   .ctl-lbl { font-size: 11px; color: var(--mut); margin-bottom: 6px; }
@@ -179,12 +192,15 @@
 
   <div id="preflight"></div>
 
-  <h2>Live sessions <span class="help" data-tip="tip-sessions">?</span></h2>
-  <div class="tipbox" id="tip-sessions" hidden>Every open Claude Code chat and its state: <b>green</b> working · <b>yellow</b> needs your input · <b>red</b> hit an issue · <b>blue</b> done. The bell mutes that project's notifications. Chats idle for 4+ hours drop off.</div>
+  <h2>Live sessions <span class="help" data-tip="tip-sessions">?</span>
+    <span class="hspacer"></span>
+    <span class="winopt" data-h="1">1h</span><span class="winopt" data-h="4">4h</span><span class="winopt" data-h="12">12h</span>
+  </h2>
+  <div class="tipbox" id="tip-sessions" hidden>Every open Claude Code chat by its name, with its state: <b>green</b> working · <b>yellow</b> needs your input · <b>red</b> hit an issue · <b>blue</b> done. The bell mutes that project's notifications. The <b>1h/4h/12h</b> chips choose how recently a chat must have been active to stay listed.</div>
   <div class="panel" id="sessions"></div>
 
-  <h2>Controls <span class="help" data-tip="tip-controls">?</span></h2>
-  <div class="tipbox" id="tip-controls" hidden>Global settings — every chat picks them up on its next turn. Mode: <b>observe</b> logs silently, <b>advise</b> shows pre-flight hints, <b>gate</b> blocks heavy prompts when context/quota crosses your thresholds (resend with <b>!force</b> to override).</div>
+  <h2>Controls <span class="help" data-tip="tip-controls">?</span><span id="saved" class="saved" hidden></span></h2>
+  <div class="tipbox" id="tip-controls" hidden>Global settings — every chat picks them up on its next turn. Mode: <b>observe</b> logs silently, <b>advise</b> shows pre-flight hints, <b>gate</b> blocks a prompt when projected context/quota crosses your sliders (resend with <b>!force</b> to override). <b>Pause alerts</b> snoozes every notification for an hour; <b>Test notification</b> fires a sample toast so you can check your macOS settings.</div>
   <div class="panel pad" id="controls"></div>
 
   <h2>Quota <span class="help" data-tip="tip-quota">?</span></h2>
@@ -193,9 +209,10 @@
 
   <details id="cardsBox">
     <summary>Landing cards <span id="cardCount"></span> <span class="help" data-tip="tip-cards">?</span></summary>
-    <div class="tipbox" id="tip-cards" hidden>A receipt for each finished turn: what changed, what actually ran, and whether Claude's claims were checked. <b>VERIFIED</b> = a test/build ran and passed. <b>UNVERIFIED</b> = work done but nothing proved it. <b>FAILED</b> = a run failed. <b>NO-OP</b> = nothing changed.</div>
     <div class="panel" id="cards"></div>
   </details>
+  <!-- Outside the <details> so the tip can open while the drawer is closed. -->
+  <div class="tipbox" id="tip-cards" hidden>A receipt for each finished turn: what changed, what actually ran, and whether Claude's claims were checked. <b>VERIFIED</b> = a test/build ran and passed. <b>UNVERIFIED</b> = work done but nothing proved it. <b>FAILED</b> = a run failed. <b>NO-OP</b> = nothing changed.</div>
 </div>
 
 <script>
@@ -235,10 +252,38 @@
     if (tip) tip.hidden = !tip.hidden;
   });
 
+  // Live-window chips (1h/4h/12h): how recently a chat must have been active
+  // to stay in the Live sessions list.
+  function syncWinChips() {
+    const hrs = (cfg && cfg.liveWindowHours) || 4;
+    document.querySelectorAll('.winopt').forEach((w) => w.classList.toggle('on', Number(w.dataset.h) === hrs));
+  }
+  document.querySelectorAll('.winopt').forEach((w) => {
+    w.onclick = () => {
+      if (!cfg) return;
+      cfg.liveWindowHours = Number(w.dataset.h);
+      syncWinChips();
+      patchConfig({ liveWindowHours: cfg.liveWindowHours });
+    };
+  });
+
+  // Visible confirmation that a control actually saved — the settings apply
+  // to each chat's NEXT turn, which is otherwise invisible.
+  function flashSaved(text = '✓ saved') {
+    const el = $('saved');
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(flashSaved._t);
+    flashSaved._t = setTimeout(() => { el.hidden = true; }, 1600);
+  }
+
   async function patchConfig(patch) {
     try {
       const r = await fetch('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
-      if (r.ok) cfg = await r.json();
+      if (r.ok) {
+        cfg = await r.json();
+        flashSaved();
+      }
     } catch { /* offline; local state already updated optimistically */ }
   }
 
@@ -275,7 +320,8 @@
     if (g.heavy) parts.push('heavy');
     const silent = mode === 'observe' ? ' <span class="pf-idle">(observe — silent)</span>' : '';
     const lint = g.lint ? `<div class="pf-lint">${esc(g.lint)}</div>` : '';
-    $('preflight').innerHTML = `<div class="pf"><div class="pf-main">last prompt · ${parts.join(' · ')}${silent}</div>${lint}</div>`;
+    const block = g.blocked ? `<div class="pf-block">⛔ blocked — ${esc(g.blocked)} · resend with !force to override</div>` : '';
+    $('preflight').innerHTML = `<div class="pf"><div class="pf-main">last prompt · ${parts.join(' · ')}${silent}</div>${block}${lint}</div>`;
   }
 
   const fmtTokens = (n) => (n < 1000 ? String(n) : n < 1e6 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M');
@@ -310,6 +356,7 @@
     const tog = (label, on, key) => `<div class="row"><span>${esc(label)}</span><span class="sw ${on ? 'on' : ''}" data-tog="${key}"></span></div>`;
     $('controls').innerHTML =
       `<div class="ctl-lbl">Mode</div><div class="seg">${seg}</div>` +
+      `<div class="mode-hint" id="modeHint"></div>` +
       tog('Working alerts', n.working, 'working') +
       tog('Needs-input alerts', n.needsInput, 'needsInput') +
       tog('Done / issue alerts', n.done, 'done') +
@@ -318,13 +365,46 @@
       `<div class="row slide"><span>Context warn</span><span class="sval" id="ctxv">${c.contextWarnPct}%</span></div>` +
       `<input type="range" min="0" max="100" value="${c.contextWarnPct}" id="ctxr">` +
       `<div class="row slide"><span>Quota warn</span><span class="sval" id="qv">${c.quotaWarnPct}%</span></div>` +
-      `<input type="range" min="0" max="100" value="${c.quotaWarnPct}" id="qr">`;
+      `<input type="range" min="0" max="100" value="${c.quotaWarnPct}" id="qr">` +
+      `<div class="ctl-btns"><button class="ctl-btn" id="testNotif">Test notification</button><button class="ctl-btn" id="snoozeBtn"></button></div>`;
+
+    const MODE_HINT = {
+      observe: 'Logging only — no hints, no blocking.',
+      advise: 'Pre-flight hints on each prompt; never blocks.',
+      gate: 'Blocks a prompt when projected context or quota crosses the sliders below; resend with !force to override.',
+    };
+    const setModeHint = () => { $('modeHint').textContent = MODE_HINT[cfg.mode] || ''; };
+    setModeHint();
 
     $('controls').querySelectorAll('.seg button').forEach((b) => b.onclick = () => {
       cfg.mode = b.dataset.mode;
       $('controls').querySelectorAll('.seg button').forEach((x) => x.classList.toggle('on', x === b));
+      setModeHint();
       patchConfig({ mode: b.dataset.mode });
     });
+
+    $('testNotif').onclick = async () => {
+      try {
+        const r = await fetch('/test-notification', { method: 'POST' });
+        flashSaved(r.ok ? '✓ sent' : 'failed');
+      } catch {
+        flashSaved('failed');
+      }
+    };
+    const updateSnoozeBtn = () => {
+      const until = (cfg && cfg.snoozeUntil) || 0;
+      $('snoozeBtn').textContent = until > Date.now()
+        ? `Resume alerts (${new Date(until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`
+        : 'Pause alerts · 1h';
+    };
+    renderControls.updateSnoozeBtn = updateSnoozeBtn;
+    updateSnoozeBtn();
+    $('snoozeBtn').onclick = () => {
+      const paused = (cfg.snoozeUntil || 0) > Date.now();
+      cfg.snoozeUntil = paused ? 0 : Date.now() + 3600_000;
+      updateSnoozeBtn();
+      patchConfig({ snoozeUntil: cfg.snoozeUntil });
+    };
     $('controls').querySelectorAll('.sw[data-tog]').forEach((sw) => sw.onclick = () => {
       const key = sw.dataset.tog, on = !sw.classList.contains('on');
       sw.classList.toggle('on', on);
@@ -356,14 +436,14 @@
     if (!list.length) { $('sessions').innerHTML = '<div class="pad empty">No sessions yet.</div>'; return; }
     const muted = new Set((cfg && cfg.mutedProjects) || []);
     $('sessions').innerHTML = list.map((s) => {
-      const name = s.project || s.id;
+      const name = s.title || s.project || s.id; // the chat's own name first
       const tag = s.status === 'done'
         ? (s.verdict ? `<span class="chip ${chipCls(s.verdict)}">${esc(s.verdict)}</span>` : '')
         : `<span class="slabel ${s.status}">${STATE_LABEL[s.status] || esc(s.status)}</span>`;
       const isMuted = s.project && muted.has(s.project);
       const bell = s.project ? `<span class="bell ${isMuted ? 'muted' : ''}" data-proj="${esc(s.project)}" title="${isMuted ? 'Unmute' : 'Mute'} ${esc(s.project)}">${isMuted ? '🔕' : '🔔'}</span>` : '';
       return `<div class="srow"><span class="orb ${s.status}"></span>
-        <span class="sid" title="${esc(s.id)}">${esc(name)}</span>${tag}${bell}</div>`;
+        <span class="sid" title="${esc(s.project || '')} · ${esc(s.id)}">${esc(name)}</span>${tag}${bell}</div>`;
     }).join('');
   }
 
@@ -412,6 +492,8 @@
       const st = await (await fetch('/state', { cache: 'no-store' })).json();
       cfg = st.config || cfg;
       if (cfg && !controlsDone) { renderControls(cfg); controlsDone = true; }
+      syncWinChips();
+      if (controlsDone && renderControls.updateSnoozeBtn) renderControls.updateSnoozeBtn();
       $('mode').textContent = st.mode ? '· ' + st.mode : '';
       $('meta').textContent = 'updated ' + new Date(st.ts).toLocaleTimeString();
       renderAlert(st.sessions || []);

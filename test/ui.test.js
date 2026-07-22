@@ -101,6 +101,35 @@ test('server serves /state JSON and the index page', async () => {
   }
 });
 
+test('POST /test-notification fires through the notify pipeline', async () => {
+  const log = path.join(dir, 'test-notify.ndjson');
+  process.env.CCTOWER_NOTIFY_LOG = log;
+  const server = start({ open: false, port: 0 });
+  await new Promise((r) => server.once('listening', r));
+  try {
+    const r = await fetch(`http://127.0.0.1:${server.address().port}/test-notification`, { method: 'POST' });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual((await r.json()).status, 'logged');
+    const note = JSON.parse(fs.readFileSync(log, 'utf8').trim());
+    assert.match(note.title, /test/i);
+  } finally {
+    server.close();
+    delete process.env.CCTOWER_NOTIFY_LOG;
+  }
+});
+
+test('sessions carry the chat title when known', () => {
+  const f = path.join(dir, 'sessions', 'sess-titled.json');
+  fs.writeFileSync(f, JSON.stringify({ project: 'proj', title: 'cctower Phase 0 implementation', state: 'done', verdict: 'VERIFIED' }));
+  try {
+    const st = collectState();
+    const s = st.sessions.find((x) => x.id === 'sess-titled');
+    assert.strictEqual(s.title, 'cctower Phase 0 implementation');
+  } finally {
+    fs.unlinkSync(f);
+  }
+});
+
 test('POST /config updates config and shows up in /state', async () => {
   const server = start({ open: false, port: 0 });
   await new Promise((r) => server.once('listening', r));

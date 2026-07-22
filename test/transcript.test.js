@@ -56,6 +56,25 @@ test('readTailEntries parses the same turn as a full read', () => {
   assert.strictEqual(T.readTailEntries(file, 200).length < T.readEntries(file).length, true, 'tiny tail truncates from the front');
 });
 
+test('lastContextTokens reads live window occupancy from the last response', () => {
+  const entries = T.readEntries(path.join(FIX, 'transcript-verified.jsonl'));
+  // final assistant usage: 1500 input + 0 cache_creation + 9500 cache_read
+  assert.strictEqual(T.lastContextTokens(entries), 11000);
+});
+
+test('lastAiTitle returns the newest ai-title entry', () => {
+  const os = require('os');
+  const fs2 = require('fs');
+  const p = path.join(fs2.mkdtempSync(path.join(os.tmpdir(), 'cct-title-')), 't.jsonl');
+  fs2.writeFileSync(p, [
+    JSON.stringify({ type: 'ai-title', aiTitle: 'Old name', sessionId: 's' }),
+    JSON.stringify({ type: 'user', message: { role: 'user', content: 'hi' } }),
+    JSON.stringify({ type: 'ai-title', aiTitle: 'cctower Phase 0 implementation', sessionId: 's' }),
+  ].join('\n'));
+  assert.strictEqual(T.lastAiTitle(T.readEntries(p)), 'cctower Phase 0 implementation');
+  assert.strictEqual(T.lastAiTitle(T.readEntries(path.join(FIX, 'transcript-verified.jsonl'))), null);
+});
+
 test('readEntries tolerates a corrupt trailing line', () => {
   // no throw, and the good lines still parse
   const entries = T.readEntries(path.join(FIX, 'transcript-verified.jsonl'));
