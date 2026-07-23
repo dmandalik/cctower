@@ -28,19 +28,31 @@
       --shadow: none;
     }
   }
-  /* Forced dark (☾) is a deeper matte night-black — MUST come after the media
-     block: both selectors tie on specificity, so source order decides, and
-     this block losing was exactly the "dark looks like auto" bug. */
+  /* Forced dark (☾) is pure monochrome — black surfaces, white/gray accents
+     only. MUST come after the media block: both selectors tie on specificity,
+     so source order decides (that tie was the "dark looks like auto" bug).
+     State meaning is carried by the text labels, since color is out. */
   :root[data-theme="dark"] {
-    --bg: #121212; --panel: #1b1b1a; --line: #2a2a28;
-    --ink: #e4e2dd; --mut: #8d8b86;
-    --accent: #e08a6d; --accent-weak: rgba(224, 138, 109, .13);
-    --green: #74ab78; --green-bg: rgba(116, 171, 120, .14);
-    --amber: #cc984f; --amber-bg: rgba(204, 152, 79, .14);
-    --red: #d67d6c; --red-bg: rgba(214, 125, 108, .14);
-    --gray: #8d8b86; --gray-bg: rgba(141, 139, 134, .14);
+    --bg: #000; --panel: #111; --line: #2c2c2c;
+    --ink: #f2f2f2; --mut: #9a9a9a;
+    --accent: #fff; --accent-weak: rgba(255, 255, 255, .12);
+    --green: #e8e8e8; --green-bg: rgba(255, 255, 255, .12);
+    --amber: #cfcfcf; --amber-bg: rgba(255, 255, 255, .1);
+    --red: #fff; --red-bg: rgba(255, 255, 255, .16);
+    --gray: #9a9a9a; --gray-bg: rgba(255, 255, 255, .08);
     --shadow: none;
   }
+  /* Monochrome overrides for colors that are hardcoded elsewhere. */
+  :root[data-theme="dark"] .alert { color: #000; }
+  :root[data-theme="dark"] .ctl-btn:hover { color: #000; }
+  :root[data-theme="dark"] .sw.on::after { background: #000; }
+  :root[data-theme="dark"] .orb.working { background: #fff; --gc: 255,255,255; }
+  :root[data-theme="dark"] .orb.waiting { background: #bdbdbd; --gc: 189,189,189; }
+  :root[data-theme="dark"] .orb.issue { background: #8a8a8a; --gc: 138,138,138; }
+  :root[data-theme="dark"] .orb.done { background: #5c5c5c; box-shadow: 0 0 6px 1px rgba(255,255,255,.25); }
+  :root[data-theme="dark"] .slabel.working { color: #fff; }
+  :root[data-theme="dark"] .slabel.waiting { color: #bdbdbd; }
+  :root[data-theme="dark"] .slabel.issue { color: #8a8a8a; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
     font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, sans-serif; -webkit-font-smoothing: antialiased; }
@@ -328,6 +340,18 @@
 
   const fmtTokens = (n) => (n < 1000 ? String(n) : n < 1e6 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M');
 
+  // "claude-fable-5" -> "Fable 5" · "claude-opus-4-8" -> "Opus 4.8"
+  function prettyModel(id) {
+    const parts = String(id || 'unknown').replace(/^claude-/, '').split('-');
+    const words = [];
+    for (const p of parts) {
+      if (/^\d+$/.test(p) && words.length && /^\d/.test(words[words.length - 1])) words[words.length - 1] += '.' + p;
+      else if (/^\d+$/.test(p)) words.push(p);
+      else words.push(p[0].toUpperCase() + p.slice(1));
+    }
+    return words.join(' ');
+  }
+
   function renderQuota(s, q, est) {
     const snap = s || {};
     const model = (snap.modelName || snap.model) ? `<div class="model">${esc(snap.modelName || snap.model)}</div>` : '';
@@ -339,9 +363,15 @@
       if (typeof q.weeklyPct === 'number') rows.push(bar('Weekly', q.weeklyPct, 85));
       body = model + rows.join('');
     } else if (q && q.source === 'local estimate') {
-      body = model +
+      // Totals first, then a per-model breakdown (heaviest first) — the
+      // snapshot's model name is stale here, so it is deliberately not shown.
+      const mrows = (q.models || []).slice(0, 5).map((m) =>
+        `<div class="bar"><div class="lbl"><span class="model">${esc(prettyModel(m.model))}</span><span class="val">5h ${fmtTokens(m.fiveHourTokens)} · 7d ${fmtTokens(m.weeklyTokens)}</span></div></div>`,
+      ).join('');
+      body =
         `<div class="bar"><div class="lbl"><span>5-hour usage</span><span class="val">${fmtTokens(q.fiveHourTokens)} tokens</span></div></div>` +
-        `<div class="bar"><div class="lbl"><span>7-day usage</span><span class="val">${fmtTokens(q.weeklyTokens)} tokens</span></div></div>`;
+        `<div class="bar"><div class="lbl"><span>7-day usage</span><span class="val">${fmtTokens(q.weeklyTokens)} tokens</span></div></div>` +
+        mrows;
     } else {
       body = `<div class="empty">No quota data — no statusline rate limits and no local transcripts found.</div>`;
     }

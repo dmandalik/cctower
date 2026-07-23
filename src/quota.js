@@ -50,7 +50,12 @@ function listTranscripts(dir) {
   return out;
 }
 
-// Parse one transcript into token buckets: { "<bucket start ms>": tokens }.
+// Cache layout version — bump when the bucket shape changes so an old cache
+// is discarded (one full rescan) instead of misread.
+const CACHE_V = 2;
+
+// Parse one transcript into per-model token buckets:
+// { "<model id>": { "<bucket start ms>": tokens } }.
 function bucketFile(file, cutoff) {
   const buckets = {};
   let raw;
@@ -77,27 +82,43 @@ function bucketFile(file, cutoff) {
       (u.cache_creation_input_tokens || 0) +
       (u.cache_read_input_tokens || 0);
     if (!tokens) continue;
+    const model = (e.message && e.message.model) || 'unknown';
     const b = Math.floor(t / BUCKET_MS) * BUCKET_MS;
-    buckets[b] = (buckets[b] || 0) + tokens;
+    if (!buckets[model]) buckets[model] = {};
+    buckets[model][b] = (buckets[model][b] || 0) + tokens;
   }
   return buckets;
 }
 
-function sumWindow(files, from, to) {
-  let sum = 0;
+// Sum a window across all files, both in total and per model.
+function sumWindows(files, now) {
+  const totals = { fiveHourTokens: 0, weeklyTokens: 0 };
+  const models = {};
   for (const f of Object.values(files)) {
-    for (const [start, tokens] of Object.entries(f.buckets)) {
-      const s = Number(start);
-      if (s + BUCKET_MS > from && s < to) sum += tokens;
+    for (const [model, mb] of Object.entries(f.buckets)) {
+      for (const [start, tokens] of Object.entries(mb)) {
+        const s = Number(start);
+        if (s + BUCKET_MS <= now - WEEK_MS || s >= now) continue;
+        if (!models[model]) models[model] = { model, fiveHourTokens: 0, weeklyTokens: 0 };
+        models[model].weeklyTokens += tokens;
+        totals.weeklyTokens += tokens;
+        if (s + BUCKET_MS > now - FIVE_H_MS) {
+          models[model].fiveHourTokens += tokens;
+          totals.fiveHourTokens += tokens;
+        }
+      }
     }
   }
-  return sum;
+  const list = Object.values(models).sort((a, b) => b.weeklyTokens - a.weeklyTokens);
+  return { ...totals, models: list };
 }
 
-// Returns { fiveHourTokens, weeklyTokens } or null when no transcripts exist.
+// Returns { fiveHourTokens, weeklyTokens, models } or null when no
+// transcripts exist. models = per-model breakdown, heaviest first.
 function localEstimate(now = Date.now()) {
   const cutoff = now - WEEK_MS;
-  const cache = readJson(cacheFile(), {}) || {};
+  let cache = readJson(cacheFile(), {}) || {};
+  if (cache.v !== CACHE_V) cache = {}; // old shape -> one full rescan
 
   let files = cache.files || {};
   const fresh = typeof cache.updatedAt === 'number' && now - cache.updatedAt < REFRESH_MS;
@@ -116,13 +137,15 @@ function localEstimate(now = Date.now()) {
       const prev = files[p];
       next[p] = prev && prev.mtimeMs === mtimeMs ? prev : { mtimeMs, buckets: bucketFile(p, cutoff) };
       // prune buckets that fell out of the 7-day window
-      for (const start of Object.keys(next[p].buckets)) {
-        if (Number(start) + BUCKET_MS <= cutoff) delete next[p].buckets[start];
+      for (const mb of Object.values(next[p].buckets)) {
+        for (const start of Object.keys(mb)) {
+          if (Number(start) + BUCKET_MS <= cutoff) delete mb[start];
+        }
       }
     }
     files = next;
     try {
-      writeJson(cacheFile(), { updatedAt: now, files });
+      writeJson(cacheFile(), { v: CACHE_V, updatedAt: now, files });
     } catch {
       /* cache is best-effort */
     }
@@ -130,10 +153,7 @@ function localEstimate(now = Date.now()) {
     return null;
   }
 
-  return {
-    fiveHourTokens: sumWindow(files, now - FIVE_H_MS, now),
-    weeklyTokens: sumWindow(files, cutoff, now),
-  };
+  return sumWindows(files, now);
 }
 
 // The one quota entry point: official when the statusline captured

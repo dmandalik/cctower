@@ -16,12 +16,12 @@ function sandbox() {
   return { home, projects };
 }
 
-function usageLine(tsMs, tokens) {
+function usageLine(tsMs, tokens, model = 'claude-fable-5') {
   return (
     JSON.stringify({
       type: 'assistant',
       timestamp: new Date(tsMs).toISOString(),
-      message: { role: 'assistant', usage: { input_tokens: tokens, output_tokens: 0 } },
+      message: { role: 'assistant', model, usage: { input_tokens: tokens, output_tokens: 0 } },
     }) + '\n'
   );
 }
@@ -46,6 +46,34 @@ test('local estimate sums the 5h and 7d windows from synthetic transcripts', () 
   assert.strictEqual(q.source, 'local estimate');
   assert.strictEqual(q.fiveHourTokens, 1000);
   assert.strictEqual(q.weeklyTokens, 1500);
+});
+
+test('local estimate breaks usage down per model, heaviest first', () => {
+  const { projects } = sandbox();
+  const now = Date.now();
+  seedTranscript(projects, 's1.jsonl', [
+    usageLine(now - 3600e3, 1000, 'claude-fable-5'),
+    usageLine(now - 2 * 3600e3, 300, 'claude-opus-4-8'),
+    usageLine(now - 3 * 3600e3, 200, 'claude-fable-5'),
+  ]);
+  const q = getQuota({ now });
+  assert.strictEqual(q.fiveHourTokens, 1500);
+  assert.strictEqual(q.models.length, 2);
+  assert.deepStrictEqual(q.models[0], { model: 'claude-fable-5', fiveHourTokens: 1200, weeklyTokens: 1200 });
+  assert.deepStrictEqual(q.models[1], { model: 'claude-opus-4-8', fiveHourTokens: 300, weeklyTokens: 300 });
+});
+
+test('an old cache shape (pre-model buckets) is discarded, not misread', () => {
+  const { home, projects } = sandbox();
+  const now = Date.now();
+  seedTranscript(projects, 's1.jsonl', [usageLine(now - 3600e3, 500)]);
+  // v1-era cache: flat buckets, no version field.
+  fs.writeFileSync(
+    path.join(home, 'quota-cache.json'),
+    JSON.stringify({ updatedAt: now - 1000, files: { bogus: { mtimeMs: 1, buckets: { 123: 999999 } } } }),
+  );
+  const q = getQuota({ now });
+  assert.strictEqual(q.fiveHourTokens, 500, 'rescanned instead of trusting the stale shape');
 });
 
 test('official rate_limits from the snapshot win over the local estimate', () => {
