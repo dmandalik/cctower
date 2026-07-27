@@ -100,19 +100,38 @@ function adviseLine({ est, projected, snapshot, lintNote }) {
 //      statusline never runs),
 //   3. a stale snapshot, marked as such.
 const SNAP_FRESH_MS = 10 * 60_000;
+const WINDOW_DEFAULT = 200_000;
+const WINDOW_EXTENDED = 1_000_000;
+
+// Context window size for the model in play. Extended-context models
+// (verified live: fable-5 runs 1M) get the big window; and if measured usage
+// EXCEEDS the assumed size, the assumption is provably wrong — bump to 1M
+// rather than report a fictitious 100%. Self-correcting over hardcoded.
+function windowSize(modelId, usageTokens, snapshotSize) {
+  let size = snapshotSize || WINDOW_DEFAULT;
+  if (/\[1m\]|fable|mythos/i.test(String(modelId || ''))) size = Math.max(size, WINDOW_EXTENDED);
+  if (usageTokens != null && usageTokens > size) size = WINDOW_EXTENDED;
+  return size;
+}
+
 function liveContext(tailEntries, snapshot) {
-  const size = (snapshot && snapshot.contextSize) || 200_000;
   const fresh =
     snapshot && snapshot.ts && Date.now() - Date.parse(snapshot.ts) < SNAP_FRESH_MS;
   if (fresh && typeof snapshot.contextPct === 'number') {
-    return { pct: snapshot.contextPct, size, source: 'statusline' };
+    return { pct: snapshot.contextPct, size: (snapshot && snapshot.contextSize) || WINDOW_DEFAULT, source: 'statusline' };
   }
   const tokens = T.lastContextTokens(tailEntries);
   if (tokens != null) {
-    return { pct: Math.min(100, Math.round((tokens / size) * 100)), size, source: 'transcript' };
+    const size = windowSize(T.lastAssistantModel(tailEntries), tokens, null);
+    return {
+      pct: Math.min(100, Math.round((tokens / size) * 100)),
+      size,
+      tokens,
+      source: size === WINDOW_EXTENDED ? 'transcript · 1M window' : 'transcript',
+    };
   }
   if (snapshot && typeof snapshot.contextPct === 'number') {
-    return { pct: snapshot.contextPct, size, source: 'stale statusline' };
+    return { pct: snapshot.contextPct, size: snapshot.contextSize || WINDOW_DEFAULT, source: 'stale statusline' };
   }
   return null;
 }
@@ -141,9 +160,11 @@ function run() {
 
   // Record this turn for the landing report (git ref + estimate).
   let proj = input.cwd ? path.basename(String(input.cwd)) : undefined;
+  let prevSess = {};
   if (input.session_id) {
     const file = path.join(statePaths().sessions, `${input.session_id}.json`);
     const prev = readJson(file, {}) || {};
+    prevSess = prev;
     proj = proj || prev.project;
     writeJson(file, {
       ...prev,
@@ -153,6 +174,11 @@ function run() {
       stall: false,
       transcriptPath: input.transcript_path || prev.transcriptPath,
       lastPrompt: { ts: new Date().toISOString(), estimate: est, gitRef: gitRef(input.cwd) },
+      // A !force in gate mode opens the grace window and feeds the
+      // "you've overridden N times" escalation hint.
+      ...(forced && cfg.mode === 'gate'
+        ? { lastForcedAt: Date.now(), forcedCount: (prev.forcedCount || 0) + 1 }
+        : {}),
     });
 
     // Notify on the transition INTO working (not on the first prompt of a
@@ -164,14 +190,30 @@ function run() {
   }
 
   // Decide the gate outcome up front so the event log and the widget's
-  // pre-flight row can both show WHY a prompt was blocked.
+  // pre-flight row can both show WHY a prompt was blocked — with the CAUSE
+  // (whose fault: the chat's history, this prompt, or quota) and the remedy.
+  const graceMin = Number.isFinite(cfg.gateGraceMinutes) ? cfg.gateGraceMinutes : 15;
+  const inGrace =
+    typeof prevSess.lastForcedAt === 'number' && Date.now() - prevSess.lastForcedAt < graceMin * 60_000;
   let blockReason = null;
-  if (cfg.mode === 'gate' && !forced) {
+  let blockCause = null;
+  let remedy = null;
+  if (cfg.mode === 'gate' && !forced && !inGrace) {
     const quotaPct = snapshot && snapshot.quota && snapshot.quota.fiveHourPct;
     if (projected != null && projected >= cfg.contextWarnPct) {
-      blockReason = `projected context ${projected}% ≥ ${cfg.contextWarnPct}%`;
+      if (ctx && ctx.pct >= cfg.contextWarnPct) {
+        blockCause = 'context-full';
+        blockReason = `this chat's history already fills ${ctx.pct}% of its ${humanTokens(ctx.size)} window (threshold ${cfg.contextWarnPct}%) — your prompt isn't the problem`;
+        remedy = 'run /compact to shrink history, or start a fresh chat';
+      } else {
+        blockCause = 'prompt-too-big';
+        blockReason = `your ~${humanTokens(est.high)}-token prompt pushes context from ${ctx ? ctx.pct : '?'}% to ${projected}% (threshold ${cfg.contextWarnPct}%)`;
+        remedy = 'trim the prompt — reference files by path instead of pasting them';
+      }
     } else if (typeof quotaPct === 'number' && quotaPct >= cfg.quotaWarnPct) {
+      blockCause = 'quota';
       blockReason = `5h quota ${quotaPct}% ≥ ${cfg.quotaWarnPct}%`;
+      remedy = 'wait for the quota reset, or switch to a lighter model with /model';
     }
   }
 
@@ -185,7 +227,7 @@ function run() {
     if (blockReason) {
       notify({
         title: `⛔ Prompt blocked · ${who}`,
-        message: `${blockReason} — resend with !force to override`,
+        message: `${remedy} — or resend with !force to override`,
         urgent: true,
         sound: cfg.notifications.sound,
         group: input.session_id,
@@ -225,6 +267,8 @@ function run() {
       projected,
       ctxSource: ctx ? ctx.source : null,
       blocked: blockReason,
+      blockCause,
+      remedy,
       lint: lintNote || null,
     });
   } catch {
@@ -234,9 +278,18 @@ function run() {
   if (cfg.mode === 'observe') return 0;
 
   if (blockReason) {
-    process.stderr.write(
-      `[cctower] blocked: ${blockReason}. Resend with \`${FORCE}\` in the prompt to override.\n`,
-    );
+    const lines = [
+      `[cctower] ⛔ blocked: ${blockReason}.`,
+      `[cctower] fix: ${remedy}.`,
+      `[cctower] send anyway: add ${FORCE} to the prompt${graceMin > 0 ? ` (gate then pauses ${graceMin} min for this chat)` : ''} · Context warn is ${cfg.contextWarnPct}% in the widget.`,
+    ];
+    if ((prevSess.forcedCount || 0) >= 3) {
+      lines.push(
+        `[cctower] you've overridden ${prevSess.forcedCount} times this session — consider raising Context warn or switching to advise mode.`,
+      );
+    }
+    if (lintNote) lines.push(`[cctower] note (advisory only, not the block reason): ${lintNote}.`);
+    process.stderr.write(lines.join('\n') + '\n');
     return 2;
   }
 

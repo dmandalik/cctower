@@ -17,6 +17,7 @@ const DEFAULT_CONFIG = {
   mutedProjects: [], // project names whose notifications are silenced
   snoozeUntil: 0, // epoch ms; all notifications paused until then
   liveWindowHours: 4, // sessions quiet longer than this drop off the widget
+  gateGraceMinutes: 15, // after !force, the gate stays open this long per chat
 };
 
 // Create the directories cctower writes into. Safe to call repeatedly.
@@ -95,6 +96,9 @@ function updateConfig(patch) {
   }
   if (Number.isFinite(patch.liveWindowHours)) {
     next.liveWindowHours = Math.max(1, Math.min(24, Math.round(patch.liveWindowHours)));
+  }
+  if (Number.isFinite(patch.gateGraceMinutes)) {
+    next.gateGraceMinutes = Math.max(0, Math.min(120, Math.round(patch.gateGraceMinutes)));
   }
 
   writeJson(statePaths().config, next);

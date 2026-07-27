@@ -133,10 +133,96 @@ test('gate blocks from TRANSCRIPT-derived context when the statusline is dead', 
   input.transcript_path = path.join(FIX, 'transcript-calibration.jsonl');
   const res = runGate(input, dir);
   assert.strictEqual(res.status, 2, 'blocked on live transcript context');
-  assert.match(res.stderr, /projected context/);
+  assert.match(res.stderr, /history already fills/);
+  assert.match(res.stderr, /\/compact/);
   const pf = JSON.parse(fs.readFileSync(path.join(dir, 'preflight.json'), 'utf8'));
   assert.strictEqual(pf.ctxSource, 'transcript');
-  assert.match(pf.blocked, /projected context/);
+  assert.strictEqual(pf.blockCause, 'context-full');
+  assert.match(pf.remedy, /compact/);
+});
+
+// A fable-5 transcript holding 650k tokens: proof the 1M window is honored.
+function bigFableTranscript(dir) {
+  const t = path.join(dir, 'fable.jsonl');
+  fs.writeFileSync(t, [
+    JSON.stringify({ type: 'user', timestamp: '2026-07-23T10:00:00Z', message: { role: 'user', content: 'hi' } }),
+    JSON.stringify({ type: 'assistant', timestamp: '2026-07-23T10:00:05Z', message: { role: 'assistant', model: 'claude-fable-5', usage: { input_tokens: 2, cache_creation_input_tokens: 3000, cache_read_input_tokens: 647000, output_tokens: 10 }, content: [{ type: 'text', text: 'hello' }] } }),
+  ].join('\n'));
+  return t;
+}
+
+test('extended-context models use the 1M window — 650k tokens is 65%, not a false 100%', () => {
+  const dir = home();
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'gate', contextWarnPct: 70 }));
+  const input = readFix('prompt-basic.json');
+  input.transcript_path = bigFableTranscript(dir);
+  const res = runGate(input, dir);
+  assert.strictEqual(res.status, 0, '65% < 70% threshold — must NOT block');
+  const pf = JSON.parse(fs.readFileSync(path.join(dir, 'preflight.json'), 'utf8'));
+  assert.ok(pf.projected >= 65 && pf.projected <= 66, `projected ${pf.projected} ≈ 65`);
+  assert.match(pf.ctxSource, /1M window/);
+});
+
+test('prompt-too-big cause: the prompt, not the history, tips it over', () => {
+  const dir = home();
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'gate', contextWarnPct: 6 }));
+  const input = readFix('prompt-basic.json');
+  input.transcript_path = path.join(FIX, 'transcript-calibration.jsonl'); // ctx 5%
+  input.prompt = 'summarize this document please '.repeat(500); // ~2%+ more
+  const res = runGate(input, dir);
+  assert.strictEqual(res.status, 2);
+  assert.match(res.stderr, /pushes context from 5%/);
+  assert.match(res.stderr, /trim the prompt/);
+});
+
+test('grace window: a recent !force keeps the gate open', () => {
+  const dir = home();
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'gate', contextWarnPct: 5 }));
+  fs.writeFileSync(
+    path.join(dir, 'sessions', 'sess-basic-0001.json'),
+    JSON.stringify({ lastForcedAt: Date.now() - 60_000 }),
+  );
+  const input = readFix('prompt-basic.json');
+  input.transcript_path = path.join(FIX, 'transcript-calibration.jsonl');
+  assert.strictEqual(runGate(input, dir).status, 0, 'inside the 15-min grace');
+});
+
+test('grace window expires', () => {
+  const dir = home();
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'gate', contextWarnPct: 5 }));
+  fs.writeFileSync(
+    path.join(dir, 'sessions', 'sess-basic-0001.json'),
+    JSON.stringify({ lastForcedAt: Date.now() - 16 * 60_000 }),
+  );
+  const input = readFix('prompt-basic.json');
+  input.transcript_path = path.join(FIX, 'transcript-calibration.jsonl');
+  assert.strictEqual(runGate(input, dir).status, 2, 'grace over — blocks again');
+});
+
+test('!force in gate mode records the grace timestamp and override count', () => {
+  const dir = home();
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'gate', contextWarnPct: 5 }));
+  const input = readFix('prompt-basic.json');
+  input.transcript_path = path.join(FIX, 'transcript-calibration.jsonl');
+  input.prompt += ' !force';
+  assert.strictEqual(runGate(input, dir).status, 0);
+  const sess = JSON.parse(fs.readFileSync(path.join(dir, 'sessions', 'sess-basic-0001.json'), 'utf8'));
+  assert.ok(sess.lastForcedAt > 0);
+  assert.strictEqual(sess.forcedCount, 1);
+});
+
+test('repeat overrides earn the escalation hint', () => {
+  const dir = home();
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'gate', contextWarnPct: 5 }));
+  fs.writeFileSync(
+    path.join(dir, 'sessions', 'sess-basic-0001.json'),
+    JSON.stringify({ forcedCount: 3, lastForcedAt: Date.now() - 20 * 60_000 }),
+  );
+  const input = readFix('prompt-basic.json');
+  input.transcript_path = path.join(FIX, 'transcript-calibration.jsonl');
+  const res = runGate(input, dir);
+  assert.strictEqual(res.status, 2);
+  assert.match(res.stderr, /overridden 3 times this session/);
 });
 
 test('gate stores the chat title from an ai-title entry in the transcript', () => {

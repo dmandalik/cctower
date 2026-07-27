@@ -87,6 +87,10 @@ test('updateConfig handles snooze and the live window', () => {
   next = state.updateConfig({ snoozeUntil: -5, liveWindowHours: 99 });
   assert.strictEqual(next.snoozeUntil, 0); // clamped to cleared
   assert.strictEqual(next.liveWindowHours, 24); // clamped to a day
+  next = state.updateConfig({ gateGraceMinutes: 999 });
+  assert.strictEqual(next.gateGraceMinutes, 120); // clamped
+  next = state.updateConfig({ gateGraceMinutes: 0 });
+  assert.strictEqual(next.gateGraceMinutes, 0); // strict mode allowed
 });
 
 test('loadConfig merges partial config over defaults', () => {

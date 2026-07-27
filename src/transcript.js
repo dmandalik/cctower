@@ -237,6 +237,15 @@ function lastAiTitle(entries) {
   return null;
 }
 
+// Model id of the most recent assistant response.
+function lastAssistantModel(entries) {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const e = entries[i];
+    if (isAssistant(e) && e.message.model) return e.message.model;
+  }
+  return null;
+}
+
 // Tokens occupying the context window right now: the input side (prompt +
 // cache reads/writes) of the most recent assistant response. This is live
 // per-turn data straight from the transcript — no statusline required.
@@ -270,6 +279,7 @@ module.exports = {
   hasInterruption,
   readTailEntries,
   lastContextTokens,
+  lastAssistantModel,
   lastAiTitle,
   needsInputEvidence,
   turnNewInput,
