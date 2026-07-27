@@ -37,19 +37,23 @@ const DEDUPE_MS = 30_000;
 const REMIND_MS = 5 * 60_000; // still waiting after 5 min -> one reminder
 
 // Is a command from a pending Bash tool_use visible in the process table?
-// Overridable for tests via CCTOWER_FAKE_PS (a plain string of fake ps output).
+// Tri-state: true (running) / false (not running) / null (ps unavailable —
+// only then do heuristics apply). Tests fake the table via CCTOWER_FAKE_PS;
+// the sentinel __PS_UNAVAILABLE__ simulates a broken ps.
 function commandRunning(cmd) {
   const needle = String(cmd || '').split('\n')[0].trim().slice(0, 80);
-  if (!needle) return false;
+  if (!needle) return null;
+  let table;
   try {
-    const table =
+    table =
       process.env.CCTOWER_FAKE_PS != null
         ? process.env.CCTOWER_FAKE_PS
         : execFileSync('ps', ['-axo', 'command'], { timeout: 2000 }).toString();
-    return table.includes(needle);
   } catch {
-    return false; // can't tell -> fall through to the heuristics
+    return null;
   }
+  if (table === '__PS_UNAVAILABLE__') return null;
+  return table.includes(needle);
 }
 
 // Cheap per-file analysis, cached inside the session file keyed by transcript
@@ -100,8 +104,17 @@ function checkSession(id, sess, now = Date.now()) {
     } else if (quiet >= STALL_MS) {
       if (info.pendQuick) stalled = true; // Edit/Write finish in <1s; quiet = dialog
       else if (info.pendCmds.length) {
-        // Bash: trust the process table first; heuristics only when ps failed.
-        stalled = !info.pendCmds.some((c) => commandRunning(c) || looksLongRunning(c));
+        // The process table is the PRIMARY discriminator: a pending command
+        // that is not running after this much quiet is sitting behind a
+        // permission dialog — no matter how long-running it would be once
+        // approved. (Exempting test/install commands unconditionally was the
+        // bug that made their permission dialogs invisible.) The
+        // looksLongRunning heuristic applies only when ps is unavailable.
+        stalled = info.pendCmds.every((c) => {
+          const running = commandRunning(c);
+          if (running === null) return !looksLongRunning(c);
+          return running === false;
+        });
       }
     }
     if (!stalled) return sess;

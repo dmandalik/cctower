@@ -88,11 +88,42 @@ test('interrupted tool (user pressed Esc) -> NOT waiting', () => {
   assert.ok(!notes().some((x) => /delta/.test(x.title)));
 });
 
-test('long-running command stays working even when ps cannot see it', () => {
+test('a BLOCKED npm test (not in ps) IS a permission stall — the exemption bug', () => {
+  // ps is readable (empty table) and `npm test` is not running: the only
+  // explanation for 60s of quiet is the permission dialog. This used to be
+  // silently exempted because npm test "looks long-running".
   const t = seedTranscript('long', 'transcript-pending-tool.jsonl', 60_000, (b) => b.replace('rm -rf build', 'npm test'));
   seedSession('long', { project: 'eps', state: 'working', transcriptPath: t });
   const s = checkSession('long', readSession('long'));
-  assert.strictEqual(s.state, 'working');
+  assert.strictEqual(s.state, 'waiting');
+  assert.ok(notes().some((x) => /needs permission · eps/.test(x.title)));
+});
+
+test('a RUNNING npm test (visible in ps) stays working', () => {
+  const t = seedTranscript('run2', 'transcript-pending-tool.jsonl', 60_000, (b) => b.replace('rm -rf build', 'npm test'));
+  seedSession('run2', { project: 'iota', state: 'working', transcriptPath: t });
+  process.env.CCTOWER_FAKE_PS = 'node /usr/local/bin/npm test\nother stuff';
+  try {
+    const s = checkSession('run2', readSession('run2'));
+    assert.strictEqual(s.state, 'working');
+    assert.ok(!notes().some((x) => /iota/.test(x.title)));
+  } finally {
+    process.env.CCTOWER_FAKE_PS = '';
+  }
+});
+
+test('when ps is unavailable, the long-running heuristic is the fallback', () => {
+  process.env.CCTOWER_FAKE_PS = '__PS_UNAVAILABLE__';
+  try {
+    const t1 = seedTranscript('nops1', 'transcript-pending-tool.jsonl', 60_000, (b) => b.replace('rm -rf build', 'npm test'));
+    seedSession('nops1', { project: 'kappa', state: 'working', transcriptPath: t1 });
+    assert.strictEqual(checkSession('nops1', readSession('nops1')).state, 'working', 'long-running exempted without ps');
+    const t2 = seedTranscript('nops2', 'transcript-pending-tool.jsonl', 60_000);
+    seedSession('nops2', { project: 'lambda', state: 'working', transcriptPath: t2 });
+    assert.strictEqual(checkSession('nops2', readSession('nops2')).state, 'waiting', 'quick command still stalls without ps');
+  } finally {
+    process.env.CCTOWER_FAKE_PS = '';
+  }
 });
 
 test('fresh writes resume waiting -> working and fold waited seconds', () => {
