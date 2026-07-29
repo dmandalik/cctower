@@ -1,6 +1,6 @@
 {
   "name": "cctower",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Control tower for Claude Code - pre-flight token checks, attention alerts, and landing reports.",
   "bin": {
     "cctower": "bin/cctower.js"
