@@ -333,7 +333,10 @@
     if (g.est.content && g.est.content !== 'prose') parts.push(g.est.content);
     if (g.heavy) parts.push('heavy');
     const silent = mode === 'observe' ? ' <span class="pf-idle">(observe — silent)</span>' : '';
-    const lint = g.lint ? `<div class="pf-lint">${esc(g.lint)}</div>` : '';
+    const list = Array.isArray(g.insights) && g.insights.length ? g.insights : (g.lint ? [{ note: g.lint, evidence: '', fix: '' }] : []);
+    const lint = list.slice(0, 3).map((i) =>
+      `<div class="pf-lint">${esc(i.note)}${i.evidence ? ': ' + esc(i.evidence) : ''}${i.fix ? ' — ' + esc(i.fix) : ''}</div>`,
+    ).join('');
     const block = g.blocked
       ? `<div class="pf-block">⛔ blocked — ${esc(g.blocked)}</div>` +
         (g.remedy ? `<div class="pf-lint">fix: ${esc(g.remedy)} · or resend with !force</div>` : '')
@@ -404,7 +407,8 @@
       tog('Needs-input alerts', n.needsInput, 'needsInput', 'Toast when a chat is blocked on you — a question or a permission dialog.') +
       tog('Done / issue alerts', n.done, 'done', 'Toast when a turn finishes, with its verdict; urgent when a test or build failed.') +
       tog('Sound', n.sound, 'sound', 'Play a ping with every alert — works even when macOS hides the visual banner.') +
-      tog('Prompt lint', c.lint, 'lint', 'Check each prompt for vague scope, missing success criteria, redundant pastes, or a premium model on a trivial ask.') +
+      tog('Prompt lint', c.lint, 'lint', 'Prompt-specific insights: quotes what triggered each finding (stale paths, redundant pastes, vague scope, missing error output…) and suggests a concrete fix, using this chat and your repo as context.') +
+      tog('Multi-ask rule', c.lintMultiAsk, 'lintMultiAsk', 'Flags prompts bundling 4+ separate asks — splitting them gets each more attention. Part of Prompt lint, separately toggleable.') +
       slide('Context warn', 'ctxwarn', c.contextWarnPct, 'ctx', 'When the projected context after your prompt crosses this, advise mode hints and gate mode blocks. Context is measured live from the transcript.') +
       slide('Quota warn', 'quotawarn', c.quotaWarnPct, 'q', 'When the official 5-hour quota crosses this, gate mode blocks. Needs statusline rate-limit data; inert when Claude Code does not expose it.') +
       `<div class="row slide"><span>Force grace<span class="help" data-tip="tip-ctl-grace">?</span></span><span class="sval" id="gracev">${c.gateGraceMinutes}m</span></div>` +
@@ -452,7 +456,7 @@
     $('controls').querySelectorAll('.sw[data-tog]').forEach((sw) => sw.onclick = () => {
       const key = sw.dataset.tog, on = !sw.classList.contains('on');
       sw.classList.toggle('on', on);
-      if (key === 'lint') { cfg.lint = on; patchConfig({ lint: on }); }
+      if (key === 'lint' || key === 'lintMultiAsk') { cfg[key] = on; patchConfig({ [key]: on }); }
       else { cfg.notifications = { ...cfg.notifications, [key]: on }; patchConfig({ notifications: { [key]: on } }); }
     });
     const ctxr = $('ctxr'), qr = $('qr');

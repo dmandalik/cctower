@@ -17,8 +17,36 @@ const { statePaths } = require('../paths');
 const { loadConfig, readJson, writeJson, appendEvent } = require('../state');
 const { notify } = require('../notify');
 const { estimate, humanTokens } = require('../estimator');
-const { lint, isHeavy } = require('../lint');
+const { lintAll, insightLine, isHeavy } = require('../lint');
 const T = require('../transcript');
+
+// Repo context for prompt-specific lint suggestions: recently-changed files
+// (anchor candidates) and the tracked file list (stale-reference matching).
+// Each git call is time-boxed and fail-open; small repos answer in ~10ms.
+function repoContext(cwd) {
+  const dir = cwd || process.cwd();
+  const git = (args) => {
+    try {
+      return execFileSync('git', ['-C', dir, ...args], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 300,
+        maxBuffer: 2 * 1024 * 1024,
+      })
+        .toString()
+        .split('\n')
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
+  };
+  const recent = [
+    ...new Set([
+      ...git(['status', '--porcelain']).map((l) => l.slice(3).trim()),
+      ...git(['diff', '--name-only', 'HEAD~5', 'HEAD']),
+    ]),
+  ].slice(0, 20);
+  return { recent, all: git(['ls-files']).slice(0, 5000) };
+}
 
 // Prompts containing this token always pass the gate (override hint).
 const FORCE = '!force';
@@ -153,19 +181,51 @@ function run() {
   const projected = ctx ? Math.min(100, Math.round(ctx.pct + (est.high / ctx.size) * 100)) : null;
   const chatTitle = T.lastAiTitle(tailEntries);
 
-  const note = cfg.lint
-    ? lint({ prompt, estHigh: est.high, heavy, model, transcript: readTranscript(input.transcript_path) })
-    : null;
-  const lintNote = note && note.note;
-
-  // Record this turn for the landing report (git ref + estimate).
+  // Read the prior session record early — lint wants last turn's verdict.
   let proj = input.cwd ? path.basename(String(input.cwd)) : undefined;
   let prevSess = {};
   if (input.session_id) {
+    prevSess = readJson(path.join(statePaths().sessions, `${input.session_id}.json`), {}) || {};
+    proj = proj || prevSess.project;
+  }
+
+  // Prompt-specific insights: quoted evidence + concrete fixes, using the
+  // chat (transcript) and repo (git) as context. Top insight drives the
+  // toast/advise line; the widget shows up to three.
+  const insights = cfg.lint
+    ? lintAll({
+        prompt,
+        estHigh: est.high,
+        heavy,
+        model,
+        transcriptText: readTranscript(input.transcript_path),
+        prevPrompts: tailEntries.filter(T.isHumanPrompt).map(T.userText),
+        repo: repoContext(input.cwd),
+        readFile: (f) => {
+          try {
+            const p = path.isAbsolute(f) ? f : path.join(input.cwd || '.', f);
+            return fs.statSync(p).size < 262144 ? fs.readFileSync(p, 'utf8') : null;
+          } catch {
+            return null;
+          }
+        },
+        fileExists: (f) => {
+          try {
+            return fs.existsSync(path.isAbsolute(f) ? f : path.join(input.cwd || '.', f));
+          } catch {
+            return false;
+          }
+        },
+        lastVerdict: prevSess.verdict || null,
+        config: cfg,
+      })
+    : [];
+  const lintNote = insights.length ? insightLine(insights[0]) : null;
+
+  // Record this turn for the landing report (git ref + estimate).
+  if (input.session_id) {
     const file = path.join(statePaths().sessions, `${input.session_id}.json`);
-    const prev = readJson(file, {}) || {};
-    prevSess = prev;
-    proj = proj || prev.project;
+    const prev = prevSess;
     writeJson(file, {
       ...prev,
       project: proj,
@@ -252,7 +312,9 @@ function run() {
     projected,
     ctxSource: ctx ? ctx.source : null,
     blocked: blockReason,
-    lint: lintNote || null,
+    // Stable rule note (not the per-prompt evidence line) so the report's
+    // "top lint findings" aggregation still groups correctly.
+    lint: insights.length ? insights[0].note : null,
   });
 
   // In GUI clients the advise line below reaches the model's context, not the
@@ -270,6 +332,7 @@ function run() {
       blockCause,
       remedy,
       lint: lintNote || null,
+      insights: insights.slice(0, 3),
     });
   } catch {
     /* display is best-effort; never block the hook */

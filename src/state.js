@@ -14,6 +14,7 @@ const DEFAULT_CONFIG = {
   quotaWarnPct: 85,
   notifications: { working: true, needsInput: true, done: true, advise: true, sound: false },
   lint: true,
+  lintMultiAsk: true, // the "N asks in one prompt" rule, separately toggleable
   mutedProjects: [], // project names whose notifications are silenced
   snoozeUntil: 0, // epoch ms; all notifications paused until then
   liveWindowHours: 4, // sessions quiet longer than this drop off the widget
@@ -81,6 +82,7 @@ function updateConfig(patch) {
   if (Number.isFinite(patch.contextWarnPct)) next.contextWarnPct = clampPct(patch.contextWarnPct);
   if (Number.isFinite(patch.quotaWarnPct)) next.quotaWarnPct = clampPct(patch.quotaWarnPct);
   if (typeof patch.lint === 'boolean') next.lint = patch.lint;
+  if (typeof patch.lintMultiAsk === 'boolean') next.lintMultiAsk = patch.lintMultiAsk;
   if (patch.notifications && typeof patch.notifications === 'object') {
     next.notifications = { ...cur.notifications };
     for (const k of ['working', 'needsInput', 'done', 'advise', 'sound']) {

@@ -270,6 +270,8 @@ function hasCompaction(entries) {
 module.exports = {
   readEntries,
   sliceTurn,
+  isHumanPrompt,
+  userText,
   lastHumanIndex,
   toolUses,
   toolResults,
