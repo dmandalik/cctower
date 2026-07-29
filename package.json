@@ -1,5 +1,5 @@
 {
-  "name": "cctower",
+  "name": "@dmandalik/cctower",
   "version": "0.0.2",
   "description": "Control tower for Claude Code - pre-flight token checks, attention alerts, and landing reports.",
   "bin": {

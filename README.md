@@ -33,10 +33,12 @@ slows a session, and fails open on any internal error.
 ## Install
 
 ```sh
-npm install -g cctower
+npm install -g @dmandalik/cctower
 cctower init --dry-run
 cctower init
 ```
+
+(The package is scoped; the installed command is still plain `cctower`.)
 
 `init` merges cctower's entries into `~/.claude/settings.json` idempotently —
 running it twice changes nothing, and your own hooks are left untouched. The
