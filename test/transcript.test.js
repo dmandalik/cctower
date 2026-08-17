@@ -62,6 +62,34 @@ test('lastContextTokens reads live window occupancy from the last response', () 
   assert.strictEqual(T.lastContextTokens(entries), 11000);
 });
 
+test('a /compact command invalidates all earlier usage — context becomes unknown', () => {
+  const entries = [
+    { type: 'assistant', message: { role: 'assistant', usage: { input_tokens: 2, cache_read_input_tokens: 620000 } } },
+    { type: 'user', message: { role: 'user', content: '<command-name>/compact</command-name>' } },
+  ];
+  assert.strictEqual(T.lastContextTokens(entries), null, 'pre-compact usage must not be reported');
+  assert.ok(T.hasCompaction(entries));
+  // ...and once a real post-compact response lands, that usage wins again.
+  entries.push({ type: 'assistant', message: { role: 'assistant', usage: { input_tokens: 4000, cache_read_input_tokens: 8000 } } });
+  assert.strictEqual(T.lastContextTokens(entries), 12000);
+});
+
+test('zero-usage queue artifacts are skipped, not reported as 0%', () => {
+  const entries = [
+    { type: 'assistant', message: { role: 'assistant', usage: { input_tokens: 5000 } } },
+    { type: 'assistant', message: { role: 'assistant', usage: { input_tokens: 0, cache_read_input_tokens: 0 } } },
+  ];
+  assert.strictEqual(T.lastContextTokens(entries), 5000);
+});
+
+test('slash-command entries are not human prompts', () => {
+  const cmd = { type: 'user', message: { role: 'user', content: '<command-name>/model</command-name> <command-args>x</command-args>' } };
+  assert.strictEqual(T.isHumanPrompt(cmd), false);
+  assert.strictEqual(T.isLocalCommand(cmd), true);
+  assert.strictEqual(T.isContextReset(cmd), false);
+  assert.ok(T.isContextReset({ type: 'user', message: { role: 'user', content: '<command-name>/clear</command-name>' } }));
+});
+
 test('lastAiTitle returns the newest ai-title entry', () => {
   const os = require('os');
   const fs2 = require('fs');

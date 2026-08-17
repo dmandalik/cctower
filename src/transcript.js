@@ -51,11 +51,23 @@ function isInterruptionMarker(e) {
   return /^\s*\[Request interrupted/i.test(userText(e));
 }
 
+// Slash-command invocations are logged as user entries with command markup —
+// records, not prompts.
+function isLocalCommand(e) {
+  return e && e.type === 'user' && /<command-name>/.test(userText(e));
+}
+
+// /compact and /clear rebuild the context window: any usage numbers written
+// before them describe a context that no longer exists.
+function isContextReset(e) {
+  return isLocalCommand(e) && /<command-name>\/(compact|clear)\b/.test(userText(e));
+}
+
 // A genuine human prompt (not a tool_result carrier, meta entry, or
 // interruption marker — all of which real transcripts also store as "user").
 function isHumanPrompt(e) {
   if (!e || e.type !== 'user' || !e.message || e.isMeta) return false;
-  if (isInterruptionMarker(e)) return false;
+  if (isInterruptionMarker(e) || isLocalCommand(e)) return false;
   const c = e.message.content;
   if (typeof c === 'string') return c.trim().length > 0;
   if (Array.isArray(c)) {
@@ -252,18 +264,28 @@ function lastAssistantModel(entries) {
 function lastContextTokens(entries) {
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i];
+    // A /compact or /clear seen before any usage entry means the context was
+    // rebuilt and every usage number beyond this point is stale — report
+    // "unknown" rather than a pre-compact figure that blocks prompts.
+    if (isContextReset(e)) return null;
     if (isAssistant(e) && e.message.usage) {
       const u = e.message.usage;
-      return (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
+      const sum =
+        (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
+      if (sum > 0) return sum; // zero-usage entries are queue artifacts, keep looking
     }
   }
   return null;
 }
 
-// Conservative: only flag an obvious compaction/summary entry.
+// Did the context get rebuilt in this span? Covers the real signal observed
+// in current transcripts (a /compact or /clear command entry) plus legacy
+// summary-entry shapes, in case other versions write them.
 function hasCompaction(entries) {
   return entries.some(
-    (e) => e && (e.type === 'summary' || e.isCompactSummary === true || e.compactMetadata),
+    (e) =>
+      e &&
+      (isContextReset(e) || e.type === 'summary' || e.isCompactSummary === true || e.compactMetadata),
   );
 }
 
@@ -272,6 +294,8 @@ module.exports = {
   sliceTurn,
   isHumanPrompt,
   userText,
+  isLocalCommand,
+  isContextReset,
   lastHumanIndex,
   toolUses,
   toolResults,

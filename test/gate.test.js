@@ -163,6 +163,24 @@ test('extended-context models use the 1M window — 650k tokens is 65%, not a fa
   assert.match(pf.ctxSource, /1M window/);
 });
 
+test('after /compact the gate must NOT block on pre-compact usage', () => {
+  const dir = home();
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'gate', contextWarnPct: 50 }));
+  // Huge pre-compact usage, then the /compact command — the exact bug case.
+  const t = path.join(dir, 'compacted.jsonl');
+  fs.writeFileSync(t, [
+    JSON.stringify({ type: 'user', timestamp: '2026-07-29T10:00:00Z', message: { role: 'user', content: 'earlier prompt' } }),
+    JSON.stringify({ type: 'assistant', timestamp: '2026-07-29T10:00:05Z', message: { role: 'assistant', model: 'claude-fable-5', usage: { input_tokens: 2, cache_read_input_tokens: 900000 }, content: [{ type: 'text', text: 'big' }] } }),
+    JSON.stringify({ type: 'user', timestamp: '2026-07-29T10:01:00Z', message: { role: 'user', content: '<command-name>/compact</command-name>' } }),
+  ].join('\n'));
+  const input = readFix('prompt-basic.json');
+  input.transcript_path = t;
+  const res = runGate(input, dir);
+  assert.strictEqual(res.status, 0, 'context unknown post-compact — gate stays open');
+  const pf = JSON.parse(fs.readFileSync(path.join(dir, 'preflight.json'), 'utf8'));
+  assert.strictEqual(pf.blocked, null);
+});
+
 test('prompt-too-big cause: the prompt, not the history, tips it over', () => {
   const dir = home();
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'gate', contextWarnPct: 6 }));
