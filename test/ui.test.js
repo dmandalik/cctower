@@ -18,7 +18,7 @@ fs.mkdirSync(path.join(dir, 'sessions'), { recursive: true });
 fs.mkdirSync(path.join(dir, 'cards'), { recursive: true });
 fs.writeFileSync(
   path.join(dir, 'snapshot.json'),
-  JSON.stringify({ session: 'sess-a', model: 'claude-opus-4-8', modelName: 'Opus', contextPct: 42, contextSize: 200000, quota: { fiveHourPct: 61, weeklyPct: 34, fiveHourResets: '3:40pm' } }),
+  JSON.stringify({ ts: new Date().toISOString(), session: 'sess-a', model: 'claude-opus-4-8', modelName: 'Opus', contextPct: 42, contextSize: 200000, quota: { fiveHourPct: 61, weeklyPct: 34, fiveHourResets: '3:40pm' } }),
 );
 fs.writeFileSync(path.join(dir, 'calibration.json'), JSON.stringify({ pairs: [{ estimate: 100, actual: 110 }], correction: 1.1 }));
 fs.writeFileSync(path.join(dir, 'sessions', 'sess-a.json'), JSON.stringify({ verdict: 'VERIFIED', waitedSeconds: 12 }));

@@ -341,7 +341,8 @@
       ? `<div class="pf-block">⛔ blocked — ${esc(g.blocked)}</div>` +
         (g.remedy ? `<div class="pf-lint">fix: ${esc(g.remedy)} · or resend with !force</div>` : '')
       : '';
-    $('preflight').innerHTML = `<div class="pf"><div class="pf-main">last prompt · ${parts.join(' · ')}${silent}</div>${block}${lint}</div>`;
+    const who = g.title || g.project ? ` (${esc(g.title || g.project)})` : '';
+    $('preflight').innerHTML = `<div class="pf"><div class="pf-main">last prompt${who} · ${parts.join(' · ')}${silent}</div>${block}${lint}</div>`;
   }
 
   const fmtTokens = (n) => (n < 1000 ? String(n) : n < 1e6 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M');

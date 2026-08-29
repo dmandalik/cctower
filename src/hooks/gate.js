@@ -142,11 +142,17 @@ function windowSize(modelId, usageTokens, snapshotSize) {
   return size;
 }
 
-function liveContext(tailEntries, snapshot) {
+// Context must be OWNED by this session or reported unknown — never borrowed.
+// A snapshot only counts when it is fresh AND describes this very session
+// (the statusline stamps the session id); otherwise a brand-new chat in the
+// same directory would inherit another chat's context percentage. Unknown
+// context never blocks.
+function liveContext(tailEntries, snapshot, sessionId) {
   const fresh =
     snapshot && snapshot.ts && Date.now() - Date.parse(snapshot.ts) < SNAP_FRESH_MS;
-  if (fresh && typeof snapshot.contextPct === 'number') {
-    return { pct: snapshot.contextPct, size: (snapshot && snapshot.contextSize) || WINDOW_DEFAULT, source: 'statusline' };
+  const owned = snapshot && (!snapshot.session || snapshot.session === sessionId);
+  if (fresh && owned && typeof snapshot.contextPct === 'number') {
+    return { pct: snapshot.contextPct, size: snapshot.contextSize || WINDOW_DEFAULT, source: 'statusline' };
   }
   const tokens = T.lastContextTokens(tailEntries);
   if (tokens != null) {
@@ -158,10 +164,7 @@ function liveContext(tailEntries, snapshot) {
       source: size === WINDOW_EXTENDED ? 'transcript · 1M window' : 'transcript',
     };
   }
-  if (snapshot && typeof snapshot.contextPct === 'number') {
-    return { pct: snapshot.contextPct, size: snapshot.contextSize || WINDOW_DEFAULT, source: 'stale statusline' };
-  }
-  return null;
+  return null; // fresh chat / no data -> unknown, not somebody else's number
 }
 
 function run() {
@@ -177,7 +180,7 @@ function run() {
   const est = estimate({ text: prompt, model, correction: correctionFactor() });
   const heavy = isHeavy(prompt, est.high);
   const tailEntries = T.readTailEntries(input.transcript_path || '');
-  const ctx = liveContext(tailEntries, snapshot);
+  const ctx = liveContext(tailEntries, snapshot, input.session_id);
   const projected = ctx ? Math.min(100, Math.round(ctx.pct + (est.high / ctx.size) * 100)) : null;
   const chatTitle = T.lastAiTitle(tailEntries);
 
@@ -259,7 +262,11 @@ function run() {
   let blockCause = null;
   let remedy = null;
   if (cfg.mode === 'gate' && !forced && !inGrace) {
-    const quotaPct = snapshot && snapshot.quota && snapshot.quota.fiveHourPct;
+    // Quota is account-wide, so any session's snapshot may supply it — but
+    // only a FRESH one: 5h windows reset, so old percentages are meaningless.
+    const snapFresh =
+      snapshot && snapshot.ts && Date.now() - Date.parse(snapshot.ts) < SNAP_FRESH_MS;
+    const quotaPct = snapFresh && snapshot.quota && snapshot.quota.fiveHourPct;
     if (projected != null && projected >= cfg.contextWarnPct) {
       if (ctx && ctx.pct >= cfg.contextWarnPct) {
         blockCause = 'context-full';
@@ -324,6 +331,8 @@ function run() {
     writeJson(statePaths().preflight, {
       ts: new Date().toISOString(),
       session: input.session_id || null,
+      project: proj || null,
+      title: chatTitle || (prevSess && prevSess.title) || null,
       est: { low: est.low, high: est.high, content: est.content },
       heavy,
       projected,

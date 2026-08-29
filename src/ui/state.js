@@ -93,9 +93,12 @@ function readSessions(p, snapshot) {
         let s = checkSession(id, readJson(path.join(p.sessions, f), {}) || {});
         s = ensureTitle(p, id, s);
         const updated = fs.statSync(path.join(p.sessions, f)).mtimeMs;
-        // Per-session context is only known for the session the statusline
-        // last reported on; others show an empty mini-bar.
-        const contextPct = snapshot && snapshot.session === id ? snapshot.contextPct : null;
+        // Per-session context is only shown when the statusline snapshot is
+        // FRESH and describes this exact session — a stale snapshot must not
+        // paint another chat's number here.
+        const snapFresh =
+          snapshot && snapshot.ts && now - Date.parse(snapshot.ts) < 10 * 60_000;
+        const contextPct = snapFresh && snapshot.session === id ? snapshot.contextPct : null;
         return {
           id,
           project: s.project || null,

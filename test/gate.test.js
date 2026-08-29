@@ -19,8 +19,13 @@ function home({ mode, snapshot } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cct-gate-'));
   fs.mkdirSync(path.join(dir, 'sessions'), { recursive: true });
   if (mode) fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode }));
-  if (snapshot)
-    fs.writeFileSync(path.join(dir, 'snapshot.json'), fs.readFileSync(path.join(FIX, snapshot)));
+  if (snapshot) {
+    // Stamp the fixture fresh: only a fresh, session-owned snapshot may be
+    // used for context (the stale fallback was a cross-chat leak).
+    const s = JSON.parse(fs.readFileSync(path.join(FIX, snapshot), 'utf8'));
+    s.ts = new Date().toISOString();
+    fs.writeFileSync(path.join(dir, 'snapshot.json'), JSON.stringify(s));
+  }
   return dir;
 }
 
@@ -161,6 +166,36 @@ test('extended-context models use the 1M window — 650k tokens is 65%, not a fa
   const pf = JSON.parse(fs.readFileSync(path.join(dir, 'preflight.json'), 'utf8'));
   assert.ok(pf.projected >= 65 && pf.projected <= 66, `projected ${pf.projected} ≈ 65`);
   assert.match(pf.ctxSource, /1M window/);
+});
+
+test('a FRESH session never inherits another chat\'s context', () => {
+  const dir = home();
+  // Stale snapshot from a DIFFERENT session claiming 82% — the reported bug.
+  const snap = JSON.parse(fs.readFileSync(path.join(FIX, 'snapshot-high.json'), 'utf8'));
+  snap.session = 'some-other-chat';
+  snap.ts = new Date(Date.now() - 3600_000).toISOString(); // an hour old
+  fs.writeFileSync(path.join(dir, 'snapshot.json'), JSON.stringify(snap));
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'gate', contextWarnPct: 50 }));
+  const input = readFix('prompt-basic.json');
+  input.transcript_path = '/tmp/does-not-exist-fresh-chat.jsonl'; // brand-new chat
+  const res = runGate(input, dir);
+  assert.strictEqual(res.status, 0, 'unknown context must not block a fresh chat');
+  const pf = JSON.parse(fs.readFileSync(path.join(dir, 'preflight.json'), 'utf8'));
+  assert.strictEqual(pf.projected, null, 'no borrowed percentage reported');
+  assert.strictEqual(pf.ctxSource, null);
+});
+
+test('even a FRESH snapshot from another session is not borrowed', () => {
+  const dir = home();
+  const snap = JSON.parse(fs.readFileSync(path.join(FIX, 'snapshot-high.json'), 'utf8'));
+  snap.session = 'some-other-chat';
+  snap.ts = new Date().toISOString(); // fresh, but not ours
+  fs.writeFileSync(path.join(dir, 'snapshot.json'), JSON.stringify(snap));
+  // quotaWarnPct 99: quota is rightly account-wide; isolate the context path.
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'gate', contextWarnPct: 50, quotaWarnPct: 99 }));
+  const input = readFix('prompt-basic.json');
+  input.transcript_path = '/tmp/does-not-exist-fresh-chat.jsonl';
+  assert.strictEqual(runGate(input, dir).status, 0);
 });
 
 test('after /compact the gate must NOT block on pre-compact usage', () => {
