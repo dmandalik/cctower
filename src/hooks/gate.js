@@ -14,7 +14,7 @@ const { execFileSync, spawn } = require('child_process');
 
 const { readStdinJson } = require('../io');
 const { statePaths } = require('../paths');
-const { loadConfig, readJson, writeJson, appendEvent } = require('../state');
+const { loadConfig, readJson, writeJson, appendEvent, isEnabled } = require('../state');
 const { notify } = require('../notify');
 const { estimate, humanTokens } = require('../estimator');
 const { lintAll, insightLine, isHeavy } = require('../lint');
@@ -168,6 +168,9 @@ function liveContext(tailEntries, snapshot, sessionId) {
 }
 
 function run() {
+  // Master switch: when cctower is off, the hook is a no-op — no watcher, no
+  // session writes, no output into the model's context, no gating.
+  if (!isEnabled()) return 0;
   ensureWatcher();
   const input = readStdinJson();
   const prompt = typeof input.prompt === 'string' ? input.prompt : '';

@@ -43,6 +43,13 @@ function render(s) {
   lines.push('cctower status');
   lines.push('');
   lines.push(`  state dir     ${s.home} (${s.homeExists ? 'present' : 'not created yet'})`);
+  const off =
+    s.config.enabled === false
+      ? s.config.resumeAt
+        ? `OFF (auto-resumes ${new Date(s.config.resumeAt).toLocaleString()})`
+        : 'OFF (run: cctower on)'
+      : 'on';
+  lines.push(`  power         ${off}`);
   lines.push(`  mode          ${s.config.mode}`);
   lines.push(`  settings      ${s.settingsPath}`);
   lines.push(`  installed     hooks: ${ok(s.install.hooks)}  statusline: ${ok(s.install.statusline)}`);

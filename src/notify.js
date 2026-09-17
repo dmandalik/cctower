@@ -88,6 +88,9 @@ function windowsNotify() {
 }
 
 function notify(opts = {}) {
+  // Master switch (belt and suspenders — callers already check). The widget's
+  // Test-notification button passes force so plumbing stays testable when off.
+  if (!opts.force && !require('./state').isEnabled()) return 'off';
   if (!opts.force && snoozed()) return 'snoozed';
 
   const payload = {

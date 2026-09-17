@@ -198,6 +198,36 @@ test('even a FRESH snapshot from another session is not borrowed', () => {
   assert.strictEqual(runGate(input, dir).status, 0);
 });
 
+test('master switch: a disabled cctower gate is a silent no-op', () => {
+  const dir = home();
+  fs.writeFileSync(
+    path.join(dir, 'config.json'),
+    JSON.stringify({ enabled: false, mode: 'gate', contextWarnPct: 5 }),
+  );
+  const input = readFix('prompt-basic.json');
+  input.transcript_path = path.join(FIX, 'transcript-calibration.jsonl'); // would block if on
+  const log = path.join(dir, 'n.ndjson');
+  const res = runGate(input, dir, log);
+  assert.strictEqual(res.status, 0, 'no block while off');
+  assert.strictEqual(res.stdout, '', 'nothing injected into model context');
+  assert.ok(!fs.existsSync(path.join(dir, 'preflight.json')), 'no state written');
+  assert.ok(!fs.existsSync(log), 'no notifications');
+});
+
+test('master switch self-heals: a passed resumeAt turns cctower back on', () => {
+  const dir = home();
+  fs.writeFileSync(
+    path.join(dir, 'config.json'),
+    JSON.stringify({ enabled: false, resumeAt: Date.now() - 1000, mode: 'gate', contextWarnPct: 5 }),
+  );
+  const input = readFix('prompt-basic.json');
+  input.transcript_path = path.join(FIX, 'transcript-calibration.jsonl');
+  const res = runGate(input, dir);
+  assert.strictEqual(res.status, 2, 'resumed — gate blocks again');
+  const cfg = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'));
+  assert.strictEqual(cfg.enabled, true, 'config flipped back on');
+});
+
 test('after /compact the gate must NOT block on pre-compact usage', () => {
   const dir = home();
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ mode: 'gate', contextWarnPct: 50 }));

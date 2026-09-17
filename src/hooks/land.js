@@ -12,7 +12,7 @@ const { execFileSync } = require('child_process');
 
 const { readStdinJson } = require('../io');
 const { statePaths } = require('../paths');
-const { readJson, writeJson, writeFileAtomic, appendEvent, loadConfig } = require('../state');
+const { readJson, writeJson, writeFileAtomic, appendEvent, loadConfig, isEnabled } = require('../state');
 const { notify } = require('../notify');
 const T = require('../transcript');
 const card = require('../card');
@@ -62,6 +62,7 @@ function gitDiff(cwd, ref) {
 }
 
 function run() {
+  if (!isEnabled()) return 0; // master switch: no cards, no state, no toasts
   const input = readStdinJson();
   if (input.stop_hook_active === true) return 0; // recursion guard
 

@@ -13,6 +13,8 @@ Usage:
   cctower init [--dry-run]   register hooks + statusline in ~/.claude/settings.json
   cctower uninstall          remove cctower's entries (leaves your own hooks)
   cctower status             state-dir + install health
+  cctower off [30m|2h|1d]    pause everything (gating, hints, alerts); auto-resumes if given a duration
+  cctower on                 resume
   cctower ui                 local dashboard (coming in a later phase)
   cctower report             7-day summary (coming in a later phase)
 
@@ -65,6 +67,36 @@ function cmdStatus() {
   return 0;
 }
 
+// "30m" / "2h" / "1d" -> ms, or null when absent/unparseable.
+function parseDuration(s) {
+  const m = /^(\d+)(m|h|d)$/.exec(String(s || ''));
+  if (!m) return null;
+  return Number(m[1]) * { m: 60_000, h: 3600_000, d: 86_400_000 }[m[2]];
+}
+
+function cmdOff(args) {
+  const { updateConfig } = require('../src/state');
+  const ms = parseDuration(args[0]);
+  if (args[0] && ms === null) {
+    console.error(`Can't parse duration "${args[0]}" — use e.g. 30m, 2h, 1d, or nothing for indefinite.`);
+    return 1;
+  }
+  const resumeAt = ms ? Date.now() + ms : 0;
+  updateConfig({ enabled: false, resumeAt });
+  console.log(
+    ms
+      ? `cctower off — resumes on its own at ${new Date(resumeAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`
+      : 'cctower off — no gating, hints, or notifications until you run: cctower on',
+  );
+  return 0;
+}
+
+function cmdOn() {
+  require('../src/state').updateConfig({ enabled: true });
+  console.log('cctower on.');
+  return 0;
+}
+
 function main(argv) {
   const [cmd, ...args] = argv;
   switch (cmd) {
@@ -74,6 +106,10 @@ function main(argv) {
       return cmdUninstall();
     case 'status':
       return cmdStatus();
+    case 'off':
+      return cmdOff(args);
+    case 'on':
+      return cmdOn();
     case 'ui':
       require('../src/ui/server').start({ open: true, port: Number(process.env.CCTOWER_PORT) || 0 });
       return null; // long-running server — keep the event loop alive

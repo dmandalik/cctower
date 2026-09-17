@@ -34,6 +34,39 @@ test('init --dry-run prints a settings diff and touches nothing', () => {
   assert.ok(!fs.existsSync(env.CCTOWER_HOME), 'no state dir created');
 });
 
+test('off pauses, on resumes, off 2h sets an auto-resume', () => {
+  const { stdout, env } = run(['off']);
+  assert.match(stdout, /cctower off/);
+  let cfg = JSON.parse(fs.readFileSync(path.join(env.CCTOWER_HOME, 'config.json'), 'utf8'));
+  assert.strictEqual(cfg.enabled, false);
+  assert.strictEqual(cfg.resumeAt, 0);
+
+  execFileSync('node', [BIN, 'on'], { env, encoding: 'utf8' });
+  cfg = JSON.parse(fs.readFileSync(path.join(env.CCTOWER_HOME, 'config.json'), 'utf8'));
+  assert.strictEqual(cfg.enabled, true);
+
+  execFileSync('node', [BIN, 'off', '2h'], { env, encoding: 'utf8' });
+  cfg = JSON.parse(fs.readFileSync(path.join(env.CCTOWER_HOME, 'config.json'), 'utf8'));
+  assert.strictEqual(cfg.enabled, false);
+  assert.ok(cfg.resumeAt > Date.now() + 3600_000, 'resumeAt about two hours out');
+
+  const st = execFileSync('node', [BIN, 'status'], { env, encoding: 'utf8' });
+  assert.match(st, /power\s+OFF \(auto-resumes/);
+});
+
+test('off rejects an unparseable duration', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cct-cli-'));
+  const env = { ...process.env, CCTOWER_HOME: path.join(dir, 'home'), CCTOWER_CLAUDE_SETTINGS: path.join(dir, 's.json') };
+  let failed = false;
+  try {
+    execFileSync('node', [BIN, 'off', 'tomorrow'], { env, encoding: 'utf8', stdio: 'pipe' });
+  } catch (e) {
+    failed = true;
+    assert.match(String(e.stderr), /Can't parse duration/);
+  }
+  assert.ok(failed, 'exits non-zero');
+});
+
 test('status runs and reports install state', () => {
   const { stdout } = run(['status']);
   assert.match(stdout, /cctower status/);

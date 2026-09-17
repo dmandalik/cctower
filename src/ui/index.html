@@ -64,6 +64,10 @@
   .meta-wrap { display: flex; align-items: center; gap: 7px; }
   .theme-btn { background: none; border: 0; color: var(--mut); cursor: pointer; font: inherit; font-size: 13px; line-height: 1; padding: 3px 5px; border-radius: 6px; }
   .theme-btn:hover { color: var(--ink); background: var(--accent-weak); }
+  #powerBtn.on { color: var(--green); }
+  #powerBtn.off { color: var(--red); }
+  .offbar { background: var(--gray-bg); border: 1px dashed var(--line); color: var(--mut); border-radius: 10px; padding: 8px 12px; font-size: 12.5px; margin-bottom: 10px; }
+  body.paused h2, body.paused .panel, body.paused #preflight, body.paused #alert, body.paused details { opacity: .45; }
 
   /* tiny help icons + popover tips */
   .help {
@@ -197,11 +201,13 @@
   <header>
     <div class="brand"><span class="mark">✳</span> cctower <small id="mode" style="color:var(--mut);font-weight:400"></small></div>
     <div class="meta-wrap">
+      <button id="powerBtn" class="theme-btn" title="Pause / resume cctower">⏻</button>
       <button id="themeBtn" class="theme-btn" title="Theme"></button>
       <div class="meta" id="meta">connecting…</div>
     </div>
   </header>
 
+  <div id="offbar" class="offbar" hidden></div>
   <div id="alert"></div>
 
   <div id="preflight"></div>
@@ -254,6 +260,29 @@
     applyTheme();
   };
   applyTheme();
+
+  // Master power switch: pauses gating, hints, and alerts everywhere.
+  function syncPower() {
+    if (!cfg) return;
+    const on = cfg.enabled !== false;
+    const b = $('powerBtn');
+    b.classList.toggle('on', on);
+    b.classList.toggle('off', !on);
+    b.title = on ? 'cctower is ON — click to pause everything' : 'cctower is PAUSED — click to resume';
+    document.body.classList.toggle('paused', !on);
+    const bar = $('offbar');
+    bar.hidden = on;
+    if (!on) {
+      const until = cfg.resumeAt ? ` · auto-resumes ${new Date(cfg.resumeAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '';
+      bar.textContent = `⏻ cctower is paused — no gating, hints, or notifications${until}. Click ⏻ to resume.`;
+    }
+  }
+  $('powerBtn').onclick = () => {
+    if (!cfg) return;
+    cfg.enabled = cfg.enabled === false; // toggle
+    syncPower();
+    patchConfig({ enabled: cfg.enabled });
+  };
 
   // Tiny "?" helpers: click toggles the section's explanation. stopPropagation
   // keeps a help click inside the cards <summary> from toggling the drawer.
@@ -546,7 +575,8 @@
       if (cfg && !controlsDone) { renderControls(cfg); controlsDone = true; }
       syncWinChips();
       if (controlsDone && renderControls.updateSnoozeBtn) renderControls.updateSnoozeBtn();
-      $('mode').textContent = st.mode ? '· ' + st.mode : '';
+      syncPower();
+      $('mode').textContent = cfg && cfg.enabled === false ? '· off' : st.mode ? '· ' + st.mode : '';
       $('meta').textContent = 'updated ' + new Date(st.ts).toLocaleTimeString();
       renderAlert(st.sessions || []);
       renderPreflight(st.preflight, st.mode);

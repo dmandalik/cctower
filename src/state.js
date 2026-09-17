@@ -16,6 +16,8 @@ const DEFAULT_CONFIG = {
   lint: true,
   lintMultiAsk: true, // the "N asks in one prompt" rule, separately toggleable
   mutedProjects: [], // project names whose notifications are silenced
+  enabled: true, // master switch — false pauses gating, lint, and alerts entirely
+  resumeAt: 0, // epoch ms; when set and passed, a paused cctower re-enables itself
   snoozeUntil: 0, // epoch ms; all notifications paused until then
   liveWindowHours: 4, // sessions quiet longer than this drop off the widget
   gateGraceMinutes: 15, // after !force, the gate stays open this long per chat
@@ -81,6 +83,13 @@ function updateConfig(patch) {
   if (['observe', 'advise', 'gate'].includes(patch.mode)) next.mode = patch.mode;
   if (Number.isFinite(patch.contextWarnPct)) next.contextWarnPct = clampPct(patch.contextWarnPct);
   if (Number.isFinite(patch.quotaWarnPct)) next.quotaWarnPct = clampPct(patch.quotaWarnPct);
+  if (typeof patch.enabled === 'boolean') {
+    next.enabled = patch.enabled;
+    if (patch.enabled) next.resumeAt = 0; // turning on clears any pending resume
+  }
+  if (Number.isFinite(patch.resumeAt)) {
+    next.resumeAt = Math.max(0, Math.min(Math.round(patch.resumeAt), Date.now() + 7 * 24 * 3600_000));
+  }
   if (typeof patch.lint === 'boolean') next.lint = patch.lint;
   if (typeof patch.lintMultiAsk === 'boolean') next.lintMultiAsk = patch.lintMultiAsk;
   if (patch.notifications && typeof patch.notifications === 'object') {
@@ -119,7 +128,24 @@ function appendEvent(obj) {
   }
 }
 
+// The master switch, self-healing: a paused cctower whose resumeAt has passed
+// turns itself back on (people forget). Every entry point checks this first.
+function isEnabled() {
+  const cfg = loadConfig();
+  if (cfg.enabled !== false) return true;
+  if (cfg.resumeAt && Date.now() > cfg.resumeAt) {
+    try {
+      updateConfig({ enabled: true });
+    } catch {
+      /* fail-open: report enabled even if the write failed */
+    }
+    return true;
+  }
+  return false;
+}
+
 module.exports = {
+  isEnabled,
   DEFAULT_CONFIG,
   ensureDirs,
   writeFileAtomic,

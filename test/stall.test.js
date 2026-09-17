@@ -88,6 +88,22 @@ test('interrupted tool (user pressed Esc) -> NOT waiting', () => {
   assert.ok(!notes().some((x) => /delta/.test(x.title)));
 });
 
+test('master switch: a disabled cctower never flips sessions or notifies', () => {
+  const { checkAll } = require('../src/stallwatch');
+  const { updateConfig } = require('../src/state');
+  const t = seedTranscript('off1', 'transcript-pending-tool.jsonl', 60_000);
+  seedSession('off1', { project: 'paused', state: 'working', transcriptPath: t });
+  updateConfig({ enabled: false });
+  try {
+    assert.strictEqual(checkAll(), 0, 'daemon sees nothing while off');
+    const s = readSession('off1');
+    assert.strictEqual(s.state, 'working', 'state untouched');
+    assert.ok(!notes().some((x) => /paused/.test(x.title)), 'no toast');
+  } finally {
+    updateConfig({ enabled: true });
+  }
+});
+
 test('a BLOCKED npm test (not in ps) IS a permission stall — the exemption bug', () => {
   // ps is readable (empty table) and `npm test` is not running: the only
   // explanation for 60s of quiet is the permission dialog. This used to be

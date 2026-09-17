@@ -20,7 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { statePaths } = require('./paths');
-const { readJson, writeJson, loadConfig } = require('./state');
+const { readJson, writeJson, loadConfig, isEnabled } = require('./state');
 const { notify } = require('./notify');
 const { looksLongRunning } = require('./card');
 const T = require('./transcript');
@@ -177,6 +177,7 @@ function maybeNotify(id, sess, ask, now, isReminder = false) {
 // Scan every session file and check the active ones. Returns count of
 // sessions currently in a working/stalled state (the daemon's liveness input).
 function checkAll(now = Date.now()) {
+  if (!isEnabled()) return 0; // master switch: daemon goes quiet, idles out
   const p = statePaths();
   let active = 0;
   let files;
